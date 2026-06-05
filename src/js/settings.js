@@ -6,6 +6,7 @@
 import { navigate } from './router.js';
 import { getUser, getUserArea, updateUserArea, getTheme, toggleTheme, getState } from './data/store.js';
 import { showToast } from './components/toast.js';
+import { subscribeToPush } from '../main.js';
 
 /**
  * Render the settings screen.
@@ -137,6 +138,14 @@ function bindSettingsEvents() {
               toggleNotif.classList.add('active');
               toggleNotif.setAttribute('aria-checked', 'true');
               showToast('Notifications enabled! 🔔', 'success');
+              
+              if ('serviceWorker' in navigator) {
+                const reg = await navigator.serviceWorker.ready;
+                const user = getUser();
+                if (user && reg) {
+                  await subscribeToPush(reg, user);
+                }
+              }
             } else {
               showToast('Notifications blocked — check browser settings', 'warning');
             }

@@ -4,7 +4,8 @@
    ====================================================== */
 
 import { navigate } from './router.js';
-import { createUser, getState } from './data/store.js';
+import { createUser, getState, getUser } from './data/store.js';
+import { subscribeToPush } from '../main.js';
 
 let currentScreen = 0;
 let selectedAreaId = null;
@@ -215,8 +216,6 @@ function bindScreenEvents(container) {
           // If granted and SW is ready, subscribe to push
           if (result === 'granted' && 'serviceWorker' in navigator) {
             const reg = await navigator.serviceWorker.ready;
-            const { subscribeToPush } = await import('../main.js');
-            const { getUser } = await import('./data/store.js');
             const user = getUser();
             if (user && reg) {
               await subscribeToPush(reg, user);
