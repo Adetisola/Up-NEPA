@@ -1,0 +1,416 @@
+/* ======================================================
+   UP NEPA — Reactive Store
+   Supabase-backed with localStorage fallback
+   ====================================================== */
+
+import {
+  initSupabase,
+  isSupabaseReady,
+  setDeviceId,
+  fetchAreas,
+  fetchAreaStatuses,
+  getOrCreateUser as sbGetOrCreateUser,
+  submitReport as sbSubmitReport,
+  updateUser as sbUpdateUser,
+  subscribeToAllAreaStatuses,
+} from './supabase.js';
+import { AREAS, generateMockStatuses, generateMockReports } from './mock-data.js';
+
+const STORAGE_KEY_USER = 'upnepa_user';
+const STORAGE_KEY_STREAK = 'upnepa_streak';
+const STORAGE_KEY_LAST_REPORT = 'upnepa_last_report';
+const STORAGE_KEY_THEME = 'upnepa_theme';
+
+// ── Internal state ──────────────────────────────────
+let state = {
+  user: null,         // { id, deviceId, areaId, streak, lastReported, ... }
+  areas: [],          // Array of area objects
+  statuses: {},       // areaId → status object
+  reports: [],        // user's report history
+  theme: 'dark',      // current theme
+  online: false,      // whether Supabase is connected
+  initialized: false,
+};
+
+const listeners = new Set();
+let realtimeChannel = null;
+
+// ── Public API ──────────────────────────────────────
+
+export function getState() {
+  return state;
+}
+
+export function subscribe(fn) {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
+function notify() {
+  listeners.forEach((fn) => fn(state));
+}
+
+function setState(updates) {
+  state = { ...state, ...updates };
+  notify();
+}
+
+// ── Initialization ──────────────────────────────────
+
+export async function initStore() {
+  // Load user from localStorage first (instant)
+  const savedUser = localStorage.getItem(STORAGE_KEY_USER);
+  if (savedUser) {
+    try {
+      state.user = JSON.parse(savedUser);
+    } catch {
+      state.user = null;
+    }
+  }
+
+  // Load streak
+  const savedStreak = localStorage.getItem(STORAGE_KEY_STREAK);
+  if (savedStreak && state.user) {
+    try {
+      const streakData = JSON.parse(savedStreak);
+      state.user.streak = streakData.count || 0;
+      state.user.streakLastDate = streakData.lastDate || null;
+    } catch {
+      // ignore
+    }
+  }
+
+  // Load theme
+  const savedTheme = localStorage.getItem(STORAGE_KEY_THEME);
+  if (savedTheme === 'light' || savedTheme === 'dark') {
+    state.theme = savedTheme;
+  }
+  applyTheme(state.theme);
+
+  // Try to connect to Supabase
+  const deviceId = state.user?.deviceId || null;
+  initSupabase(deviceId);
+
+  if (isSupabaseReady()) {
+    try {
+      // Fetch areas from Supabase
+      const dbAreas = await fetchAreas();
+      if (dbAreas && dbAreas.length > 0) {
+        state.areas = dbAreas;
+        state.online = true;
+      } else {
+        state.areas = AREAS; // Fallback to mock
+      }
+
+      // Fetch statuses from Supabase
+      const dbStatuses = await fetchAreaStatuses();
+      if (dbStatuses) {
+        state.statuses = dbStatuses;
+      } else {
+        state.statuses = generateMockStatuses();
+      }
+
+      // Subscribe to realtime updates
+      setupRealtime();
+
+    } catch (err) {
+      console.warn('[Up NEPA] Supabase fetch failed, using mock data:', err);
+      state.areas = AREAS;
+      state.statuses = generateMockStatuses();
+    }
+  } else {
+    // Offline mode — use mock data
+    state.areas = AREAS;
+    state.statuses = generateMockStatuses();
+  }
+
+  // Generate mock reports if user exists but we're offline
+  if (state.user && !state.online) {
+    state.reports = generateMockReports(state.user.deviceId, state.user.areaId);
+  }
+
+  state.initialized = true;
+  notify();
+}
+
+// ── Realtime ────────────────────────────────────────
+
+function setupRealtime() {
+  if (realtimeChannel) {
+    realtimeChannel.unsubscribe();
+  }
+
+  realtimeChannel = subscribeToAllAreaStatuses((updatedStatus) => {
+    updateAreaStatusLocal(updatedStatus.areaId, updatedStatus);
+  });
+}
+
+export function updateAreaStatusLocal(areaId, newStatus) {
+  state.statuses = {
+    ...state.statuses,
+    [areaId]: newStatus,
+  };
+  notify();
+}
+
+// ── User Management ─────────────────────────────────
+
+export async function createUser(areaId) {
+  const deviceId = crypto.randomUUID();
+
+  // Local user object
+  const user = {
+    deviceId,
+    areaId,
+    streak: 0,
+    streakLastDate: null,
+    lastReported: null,
+    createdAt: new Date().toISOString(),
+  };
+
+  // Try to create in Supabase
+  if (isSupabaseReady()) {
+    setDeviceId(deviceId);
+    const dbUser = await sbGetOrCreateUser(deviceId, areaId);
+    if (dbUser) {
+      user.id = dbUser.id; // Store the server-side UUID
+      state.online = true;
+    }
+  }
+
+  state.user = user;
+  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+
+  notify();
+  return user;
+}
+
+export async function updateUserArea(areaId) {
+  if (!state.user) return;
+  state.user.areaId = areaId;
+  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
+
+  // Sync to Supabase
+  if (isSupabaseReady() && state.user.id) {
+    await sbUpdateUser(state.user.id, { area_id: areaId });
+  }
+
+  notify();
+}
+
+export function hasUser() {
+  return !!state.user;
+}
+
+export function getUser() {
+  return state.user;
+}
+
+// ── Area Helpers ────────────────────────────────────
+
+export function getArea(areaId) {
+  return state.areas.find((a) => a.id === areaId);
+}
+
+export function getUserArea() {
+  if (!state.user) return null;
+  return getArea(state.user.areaId);
+}
+
+export function getUserAreaStatus() {
+  if (!state.user) return null;
+  return state.statuses[state.user.areaId] || null;
+}
+
+export function getNearbyStatuses() {
+  if (!state.user) return [];
+  return state.areas
+    .filter((a) => a.id !== state.user.areaId)
+    .map((a) => ({
+      area: a,
+      status: state.statuses[a.id] || {
+        areaId: a.id,
+        currentStatus: 'UNCONFIRMED',
+        confidence: 0,
+        reportCount: 0,
+        lastUpdated: null,
+      },
+    }));
+}
+
+// ── Reports ─────────────────────────────────────────
+
+export function getLastReport() {
+  const saved = localStorage.getItem(STORAGE_KEY_LAST_REPORT);
+  if (!saved) return null;
+  try {
+    return JSON.parse(saved);
+  } catch {
+    return null;
+  }
+}
+
+export async function addReport(status) {
+  if (!state.user) return null;
+
+  const report = {
+    id: `report-${Date.now()}`,
+    userId: state.user.deviceId,
+    areaId: state.user.areaId,
+    status,
+    createdAt: new Date().toISOString(),
+  };
+
+  // Optimistic update — update local state immediately
+  state.reports = [report, ...state.reports];
+  localStorage.setItem(STORAGE_KEY_LAST_REPORT, JSON.stringify(report));
+
+  // Optimistic area status update
+  const areaStatus = state.statuses[state.user.areaId];
+  if (areaStatus) {
+    const newCount = (areaStatus.reportCount || 0) + 1;
+    state.statuses = {
+      ...state.statuses,
+      [state.user.areaId]: {
+        ...areaStatus,
+        currentStatus: status,
+        reportCount: newCount,
+        lastUpdated: report.createdAt,
+        confidence: Math.min(0.95, (areaStatus.confidence || 0.5) + 0.08),
+      },
+    };
+  }
+
+  state.user.lastReported = report.createdAt;
+  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
+
+  notify();
+
+  // Submit to Supabase (trigger will recalculate area_status properly)
+  if (isSupabaseReady() && state.user.id) {
+    try {
+      const dbReport = await sbSubmitReport(
+        state.user.id,
+        state.user.areaId,
+        status
+      );
+      if (dbReport) {
+        report.id = dbReport.id; // Replace local ID with server ID
+      }
+    } catch (err) {
+      console.warn('[Up NEPA] Report failed to sync — saved locally:', err);
+      // Report is already in localStorage, will work offline
+    }
+  }
+
+  return report;
+}
+
+// ── Streak ──────────────────────────────────────────
+
+export function updateStreak() {
+  if (!state.user) return;
+
+  const today = new Date().toDateString();
+  const streakData = {
+    count: state.user.streak || 0,
+    lastDate: state.user.streakLastDate || null,
+  };
+
+  if (streakData.lastDate === today) {
+    return streakData.count;
+  }
+
+  const yesterday = new Date(Date.now() - 86400000).toDateString();
+
+  if (streakData.lastDate === yesterday) {
+    streakData.count += 1;
+  } else if (streakData.lastDate !== today) {
+    streakData.count = 1;
+  }
+
+  streakData.lastDate = today;
+
+  state.user.streak = streakData.count;
+  state.user.streakLastDate = streakData.lastDate;
+
+  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
+  localStorage.setItem(STORAGE_KEY_STREAK, JSON.stringify(streakData));
+
+  // Sync streak to Supabase
+  if (isSupabaseReady() && state.user.id) {
+    sbUpdateUser(state.user.id, { streak: streakData.count }).catch(() => {});
+  }
+
+  notify();
+  return streakData.count;
+}
+
+export function getStreakMilestone(count) {
+  if (count >= 30) return "You're an Up NEPA legend for this area ⚡";
+  if (count >= 7) return 'One week strong 🔥 Magboro thanks you';
+  if (count >= 3) return "You're helping your whole street 🙌";
+  return null;
+}
+
+// ── Staleness ───────────────────────────────────────
+
+export function getStalenessLevel(lastUpdated) {
+  if (!lastUpdated) return 'none';
+
+  const age = Date.now() - new Date(lastUpdated).getTime();
+  const minutes = age / (1000 * 60);
+
+  if (minutes <= 90) return 'fresh';
+  if (minutes <= 180) return 'fading';
+  if (minutes <= 360) return 'stale';
+  return 'none';
+}
+
+/**
+ * Format a timestamp as a human-readable relative time.
+ */
+export function formatTimeAgo(timestamp) {
+  if (!timestamp) return 'No data';
+
+  const seconds = Math.floor((Date.now() - new Date(timestamp).getTime()) / 1000);
+
+  if (seconds < 60) return 'Just now';
+  if (seconds < 3600) {
+    const m = Math.floor(seconds / 60);
+    return `${m}m ago`;
+  }
+  if (seconds < 86400) {
+    const h = Math.floor(seconds / 3600);
+    return `${h}h ago`;
+  }
+  const d = Math.floor(seconds / 86400);
+  return `${d}d ago`;
+}
+
+// ── Theme ───────────────────────────────────────────
+
+export function getTheme() {
+  return state.theme;
+}
+
+export function toggleTheme() {
+  const newTheme = state.theme === 'dark' ? 'light' : 'dark';
+  setTheme(newTheme);
+  return newTheme;
+}
+
+export function setTheme(theme) {
+  state.theme = theme;
+  localStorage.setItem(STORAGE_KEY_THEME, theme);
+  applyTheme(theme);
+  notify();
+}
+
+function applyTheme(theme) {
+  if (theme === 'light') {
+    document.body.classList.add('light-theme');
+  } else {
+    document.body.classList.remove('light-theme');
+  }
+}
