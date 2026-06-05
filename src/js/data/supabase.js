@@ -240,3 +240,73 @@ export async function savePushSubscription(userId, subscription) {
   }
   return data;
 }
+
+// ── Notifications ───────────────────────────────────
+
+/**
+ * Fetch the latest 30 notifications for a user.
+ */
+export async function fetchNotifications(userId) {
+  if (!supabase || !userId) return [];
+  try {
+    const { data, error } = await supabase
+      .from('notifications')
+      .select('id, title, body, is_read, created_at')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(30);
+
+    if (error) throw error;
+    return data || [];
+  } catch (err) {
+    console.error('[Up NEPA] Failed to fetch notifications:', err);
+    return [];
+  }
+}
+
+/**
+ * Mark all of a user's unread notifications as read.
+ */
+export async function markAllNotificationsAsRead(userId) {
+  if (!supabase || !userId) return false;
+  try {
+    const { error } = await supabase
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('user_id', userId)
+      .eq('is_read', false);
+
+    if (error) throw error;
+    return true;
+  } catch (err) {
+    console.error('[Up NEPA] Failed to mark notifications as read:', err);
+    return false;
+  }
+}
+
+/**
+ * Subscribe to real-time notification inserts for a user.
+ */
+export function subscribeToNotifications(userId, callback) {
+  if (!supabase || !userId) return null;
+
+  const subscription = supabase
+    .channel('public:notifications:' + userId)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `user_id=eq.${userId}`,
+      },
+      (payload) => {
+        callback(payload.new);
+      }
+    )
+    .subscribe();
+
+  return () => {
+    supabase.removeChannel(subscription);
+  };
+}

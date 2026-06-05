@@ -1,10 +1,9 @@
 /* ======================================================
    UP NEPA — Main Stylesheet
    ====================================================== */
-
 @import './design-system.css';
 @import './install-banner.css';
-
+@import './notification-drawer.css';
 /* ── Header ─────────────────────────────────────────── */
 .header {
   display: flex;

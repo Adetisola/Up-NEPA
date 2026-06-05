@@ -1,0 +1,195 @@
+/* ======================================================
+   Notification Drawer (Bottom Sheet)
+   ====================================================== */
+
+   .drawer-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: var(--z-modal);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--duration-base) var(--ease-out);
+  }
+  
+  .drawer-overlay.active {
+    opacity: 1;
+    pointer-events: auto;
+  }
+  
+  .notification-drawer {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    border-radius: var(--radius-2xl) var(--radius-2xl) 0 0;
+    z-index: calc(var(--z-modal) + 1);
+    transform: translateY(100%);
+    transition: transform var(--duration-slow) var(--ease-spring);
+    display: flex;
+    flex-direction: column;
+    max-height: 85vh;
+  }
+  
+  .notification-drawer.active {
+    transform: translateY(0);
+  }
+  
+  .drawer-handle {
+    width: 40px;
+    height: 4px;
+    background: var(--border-light);
+    border-radius: var(--radius-full);
+    margin: var(--space-md) auto;
+  }
+  
+  .drawer-header {
+    padding: 0 var(--space-xl) var(--space-md);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .drawer-title {
+    font-size: var(--fs-lg);
+    font-weight: var(--fw-bold);
+  }
+  
+  .drawer-close {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--radius-full);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--text-tertiary);
+    background: var(--bg-card-hover);
+    transition: all var(--duration-fast);
+  }
+  
+  .drawer-close:hover {
+    color: var(--text-primary);
+  }
+  
+  .drawer-content {
+    overflow-y: auto;
+    padding: var(--space-lg);
+    flex: 1;
+  }
+  
+  /* ── Empty State ───────────────────────────────────── */
+  .notif-empty {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: var(--space-4xl) var(--space-lg);
+    text-align: center;
+  }
+  
+  .notif-empty-icon {
+    position: relative;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background: rgba(255, 180, 0, 0.1);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: var(--amber);
+    margin-bottom: var(--space-xl);
+    animation: glow-breathe 3s ease-in-out infinite;
+  }
+  
+  .notif-empty-icon svg {
+    width: 32px;
+    height: 32px;
+  }
+  
+  .notif-empty-text {
+    font-size: var(--fs-base);
+    color: var(--text-secondary);
+    max-width: 260px;
+    line-height: var(--lh-relaxed);
+  }
+  
+  /* ── Notification List ─────────────────────────────── */
+  .notif-list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--space-sm);
+  }
+  
+  .notif-item {
+    padding: var(--space-lg);
+    background: var(--bg-body);
+    border-radius: var(--radius-lg);
+    position: relative;
+    border: 1px solid transparent;
+  }
+  
+  .notif-item.unread {
+    background: rgba(255, 180, 0, 0.05);
+    border-color: rgba(255, 180, 0, 0.2);
+  }
+  
+  .notif-item.unread::before {
+    content: '';
+    position: absolute;
+    top: var(--space-lg);
+    right: var(--space-lg);
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--red);
+    box-shadow: 0 0 8px var(--red);
+  }
+  
+  .notif-item-title {
+    font-size: var(--fs-sm);
+    font-weight: var(--fw-bold);
+    color: var(--amber);
+    margin-bottom: 4px;
+    display: flex;
+    align-items: center;
+    gap: var(--space-xs);
+  }
+  
+  .notif-item-body {
+    font-size: var(--fs-sm);
+    color: var(--text-primary);
+    line-height: var(--lh-normal);
+    margin-bottom: var(--space-sm);
+    padding-right: var(--space-xl); /* Space for unread dot */
+  }
+  
+  .notif-item-time {
+    font-size: var(--fs-xs);
+    color: var(--text-tertiary);
+  }
+  
+  /* ── Header Badge ──────────────────────────────────── */
+  .header-btn {
+    position: relative;
+  }
+  
+  .notif-badge {
+    position: absolute;
+    top: 6px;
+    right: 8px;
+    width: 8px;
+    height: 8px;
+    background: var(--red);
+    border-radius: 50%;
+    border: 2px solid var(--bg-card);
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  }
+  

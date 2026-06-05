@@ -13,6 +13,9 @@ import {
   submitReport as sbSubmitReport,
   updateUser as sbUpdateUser,
   subscribeToAllAreaStatuses,
+  fetchNotifications,
+  markAllNotificationsAsRead,
+  subscribeToNotifications,
 } from './supabase.js';
 import { AREAS, generateMockStatuses, generateMockReports } from './mock-data.js';
 
@@ -30,6 +33,8 @@ let state = {
   theme: 'dark',      // current theme
   online: false,      // whether Supabase is connected
   initialized: false,
+  notifications: [],  // User's notification history
+  unreadCount: 0,     // Unread notifications count
 };
 
 const listeners = new Set();
@@ -110,7 +115,22 @@ export async function initStore() {
         state.statuses = generateMockStatuses();
       }
 
-      // Subscribe to realtime updates
+      // Fetch user data from Supabase (if we have a user)
+      if (state.user?.id) {
+        // Fetch real notifications
+        const notifs = await fetchNotifications(state.user.id);
+        state.notifications = notifs;
+        state.unreadCount = notifs.filter(n => !n.is_read).length;
+
+        // Ensure user exists in DB
+        const dbUser = await sbGetOrCreateUser(state.user.deviceId, state.user.areaId);
+        if (dbUser) {
+          state.user.id = dbUser.id;
+          state.user.lastReported = dbUser.last_reported;
+        }
+      }
+
+      // Setup Realtime subscriptions
       setupRealtime();
 
     } catch (err) {
@@ -136,12 +156,23 @@ export async function initStore() {
 // ── Realtime ────────────────────────────────────────
 
 function setupRealtime() {
-  if (realtimeChannel) {
-    realtimeChannel.unsubscribe();
-  }
+  if (realtimeChannel) return;
+  realtimeChannel = subscribeToAllAreaStatuses(updateAreaStatusLocal);
 
-  realtimeChannel = subscribeToAllAreaStatuses((updatedStatus) => {
-    updateAreaStatusLocal(updatedStatus.areaId, updatedStatus);
+  // Subscribe to notifications
+  if (state.user?.id) {
+    subscribeToNotifications(state.user.id, handleNewNotification);
+  }
+}
+
+function handleNewNotification(newNotif) {
+  const updatedNotifs = [newNotif, ...state.notifications];
+  // Keep only 30
+  if (updatedNotifs.length > 30) updatedNotifs.pop();
+  
+  setState({
+    notifications: updatedNotifs,
+    unreadCount: updatedNotifs.filter(n => !n.is_read).length
   });
 }
 
@@ -412,5 +443,30 @@ function applyTheme(theme) {
     document.body.classList.add('light-theme');
   } else {
     document.body.classList.remove('light-theme');
+  }
+}
+
+// ── Notifications ───────────────────────────────────
+
+export function getUnreadCount() {
+  return state.unreadCount;
+}
+
+export function getNotifications() {
+  return state.notifications;
+}
+
+export async function clearUnreadNotifications() {
+  if (state.unreadCount === 0) return;
+  
+  // Optimistic UI update
+  const updatedNotifs = state.notifications.map(n => ({ ...n, is_read: true }));
+  setState({
+    notifications: updatedNotifs,
+    unreadCount: 0
+  });
+
+  if (state.online && state.user?.id) {
+    await markAllNotificationsAsRead(state.user.id);
   }
 }

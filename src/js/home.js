@@ -11,10 +11,13 @@ import {
   getNearbyStatuses,
   getUser,
   formatTimeAgo,
+  getNotifications,
+  getUnreadCount,
 } from './data/store.js';
 import { renderStatusCard } from './components/status-card.js';
 import { renderNearbyAreas } from './components/nearby-area.js';
 import { renderStreakBanner } from './components/streak-banner.js';
+import { renderNotificationDrawer, bindNotificationDrawer } from './components/notification-drawer.js';
 import { bindReportButtons } from './reporting.js';
 
 import { deferredPrompt, triggerAppInstall } from '../main.js';
@@ -37,9 +40,11 @@ export function renderHome(container) {
     const areaStatus = getUserAreaStatus();
     const nearbyStatuses = getNearbyStatuses();
     const streak = user?.streak || 0;
+    const notifications = getNotifications();
+    const unreadCount = getUnreadCount();
 
     container.innerHTML = `
-      ${renderHeader()}
+      ${renderHeader(unreadCount)}
       <main class="home" role="main">
         ${renderInstallBanner()}
         ${renderStatusCard(areaStatus, area)}
@@ -48,6 +53,7 @@ export function renderHome(container) {
         ${renderPrediction(areaStatus)}
         ${renderStreakBanner(streak)}
       </main>
+      ${renderNotificationDrawer(notifications)}
     `;
 
     // Bind report button events
@@ -55,6 +61,9 @@ export function renderHome(container) {
 
     // Bind header events
     bindHeaderEvents();
+    
+    // Bind drawer events
+    bindNotificationDrawer();
 
     // Bind install event
     const btnInstall = document.getElementById('btn-install-pwa');
@@ -109,7 +118,9 @@ function renderInstallBanner() {
 /**
  * Render the app header.
  */
-function renderHeader() {
+function renderHeader(unreadCount = 0) {
+  const badgeHtml = unreadCount > 0 ? `<div class="notif-badge"></div>` : '';
+
   return `
     <header class="header" role="banner">
       <div class="header-logo">
@@ -120,6 +131,7 @@ function renderHeader() {
       </div>
       <div class="header-actions">
         <button class="header-btn" id="btn-notif" aria-label="Notifications" title="Notifications">
+          ${badgeHtml}
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
             <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
