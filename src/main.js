@@ -12,6 +12,25 @@ import { renderSettings } from './js/settings.js';
 // VAPID public key for push subscriptions
 const VAPID_PUBLIC_KEY = 'BHWgcj_JYaY3rdv5rFQbkxuJ0SbWWEyF-25j5lrCzTRxoUVu47hArUVubQWFHwa7o0_RbLQj8yqtCMnypZZMcoY';
 
+// ── PWA Install ─────────────────────────────────────
+export let deferredPrompt = null;
+
+window.addEventListener('beforeinstallprompt', (e) => {
+  e.preventDefault();
+  deferredPrompt = e;
+  // Notify UI that install is available
+  window.dispatchEvent(new Event('pwa-install-ready'));
+});
+
+export async function triggerAppInstall() {
+  if (!deferredPrompt) return;
+  deferredPrompt.prompt();
+  await deferredPrompt.userChoice;
+  deferredPrompt = null;
+  // Notify UI to hide install button
+  window.dispatchEvent(new Event('pwa-install-done'));
+}
+
 // ── Initialize ──────────────────────────────────────
 
 async function init() {

@@ -1,0 +1,43 @@
+/* ── PWA Install Banner ──────────────────────────────── */
+.install-banner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  padding: var(--space-md) var(--space-lg);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  animation: slide-in-bottom var(--duration-base) var(--ease-spring);
+}
+
+.install-banner-content {
+  display: flex;
+  align-items: center;
+  gap: var(--space-md);
+}
+
+.install-icon {
+  font-size: 1.5rem;
+}
+
+.install-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.install-text strong {
+  font-size: var(--fs-base);
+  color: var(--amber);
+}
+
+.install-text span {
+  font-size: var(--fs-xs);
+  color: var(--text-secondary);
+}
+
+.btn-sm {
+  padding: var(--space-xs) var(--space-sm);
+  font-size: var(--fs-sm);
+  min-height: 32px;
+}

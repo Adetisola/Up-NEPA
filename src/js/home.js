@@ -17,8 +17,11 @@ import { renderNearbyAreas } from './components/nearby-area.js';
 import { renderStreakBanner } from './components/streak-banner.js';
 import { bindReportButtons } from './reporting.js';
 
+import { deferredPrompt, triggerAppInstall } from '../main.js';
+
 let unsubscribe = null;
 let timeUpdateInterval = null;
+let pwaEventsBound = false;
 
 /**
  * Render the home screen.
@@ -38,6 +41,7 @@ export function renderHome(container) {
     container.innerHTML = `
       ${renderHeader()}
       <main class="home" role="main">
+        ${renderInstallBanner()}
         ${renderStatusCard(areaStatus, area)}
         ${renderReportButtons(areaStatus)}
         ${renderNearbyAreas(nearbyStatuses)}
@@ -51,6 +55,12 @@ export function renderHome(container) {
 
     // Bind header events
     bindHeaderEvents();
+
+    // Bind install event
+    const btnInstall = document.getElementById('btn-install-pwa');
+    if (btnInstall) {
+      btnInstall.addEventListener('click', triggerAppInstall);
+    }
   }
 
   // Initial render
@@ -71,6 +81,29 @@ export function renderHome(container) {
       }
     }
   }, 30000);
+
+  // Listen for PWA install state changes
+  if (!pwaEventsBound) {
+    window.addEventListener('pwa-install-ready', render);
+    window.addEventListener('pwa-install-done', render);
+    pwaEventsBound = true;
+  }
+}
+
+function renderInstallBanner() {
+  if (!deferredPrompt) return '';
+  return `
+    <div class="install-banner" id="pwa-install-banner">
+      <div class="install-banner-content">
+        <span class="install-icon">📱</span>
+        <div class="install-text">
+          <strong>Install Up NEPA</strong>
+          <span>Add to homescreen for easy access</span>
+        </div>
+      </div>
+      <button class="btn btn-primary btn-sm" id="btn-install-pwa">Install</button>
+    </div>
+  `;
 }
 
 /**
