@@ -17,7 +17,6 @@ import {
   markAllNotificationsAsRead,
   subscribeToNotifications,
 } from './supabase.js';
-import { AREAS, generateMockStatuses, generateMockReports } from './mock-data.js';
 
 const STORAGE_KEY_USER = 'upnepa_user';
 const STORAGE_KEY_STREAK = 'upnepa_streak';
@@ -98,30 +97,30 @@ export async function initStore() {
 
   if (isSupabaseReady()) {
     try {
-      // Fetch areas from Supabase
+      // 1. Fetch Areas
       const dbAreas = await fetchAreas();
       if (dbAreas && dbAreas.length > 0) {
         state.areas = dbAreas;
         state.online = true;
-      } else {
-        state.areas = AREAS; // Fallback to mock
       }
 
-      // Fetch statuses from Supabase
+      // 2. Fetch Area Statuses
       const dbStatuses = await fetchAreaStatuses();
       if (dbStatuses) {
         state.statuses = dbStatuses;
-      } else {
-        state.statuses = generateMockStatuses();
       }
 
-      // Fetch user data from Supabase (if we have a user)
+      // 3. Fetch user notifications
       if (state.user?.id) {
-        // Fetch real notifications
         const notifs = await fetchNotifications(state.user.id);
-        state.notifications = notifs;
-        state.unreadCount = notifs.filter(n => !n.is_read).length;
+        if (notifs) {
+          state.notifications = notifs;
+          state.unreadCount = notifs.filter(n => !n.is_read).length;
+        }
+      }
 
+      // 4. Update user in DB if they exist locally
+      if (state.user && state.user.deviceId && state.user.areaId) {
         // Ensure user exists in DB
         const dbUser = await sbGetOrCreateUser(state.user.deviceId, state.user.areaId);
         if (dbUser) {
@@ -134,19 +133,8 @@ export async function initStore() {
       setupRealtime();
 
     } catch (err) {
-      console.warn('[Up NEPA] Supabase fetch failed, using mock data:', err);
-      state.areas = AREAS;
-      state.statuses = generateMockStatuses();
+      console.warn('[Up NEPA] Supabase fetch failed', err);
     }
-  } else {
-    // Offline mode — use mock data
-    state.areas = AREAS;
-    state.statuses = generateMockStatuses();
-  }
-
-  // Generate mock reports if user exists but we're offline
-  if (state.user && !state.online) {
-    state.reports = generateMockReports(state.user.deviceId, state.user.areaId);
   }
 
   state.initialized = true;
