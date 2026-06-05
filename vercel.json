@@ -1,4 +1,5 @@
 {
+  "installCommand": "npm install && chmod +x node_modules/.bin/*",
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
