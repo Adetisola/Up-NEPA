@@ -740,6 +740,46 @@
 }
 
 /* ── Responsive ─────────────────────────────────────── */
+@media (min-width: 600px) {
+  .home {
+    max-width: 480px;
+    margin: 0 auto;
+  }
+}
+
+/* ── Connection Status ──────────────────────────────── */
+.connection-status {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: var(--space-sm) var(--space-md);
+  text-align: center;
+  font-size: var(--fs-xs);
+  font-weight: var(--fw-bold);
+  color: #fff;
+  z-index: var(--z-modal);
+  transform: translateY(100%);
+  transition: transform 0.3s var(--ease-spring);
+}
+
+.connection-status.active {
+  transform: translateY(0);
+}
+
+.connection-status.offline {
+  background: var(--red);
+}
+
+.connection-status.poor {
+  background: var(--yellow);
+  color: var(--bg-body);
+}
+
+.connection-status.online {
+  background: var(--green);
+}
+
 @media (min-width: 481px) {
   .home {
     padding: var(--space-2xl);

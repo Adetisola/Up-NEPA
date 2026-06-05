@@ -176,10 +176,11 @@ function handleNewNotification(newNotif) {
   });
 }
 
-export function updateAreaStatusLocal(areaId, newStatus) {
+export function updateAreaStatusLocal(newStatus) {
+  if (!newStatus || !newStatus.areaId) return;
   state.statuses = {
     ...state.statuses,
-    [areaId]: newStatus,
+    [newStatus.areaId]: newStatus,
   };
   notify();
 }

@@ -80,15 +80,9 @@ export function renderHome(container) {
     render();
   });
 
-  // Update relative times every 30 seconds
+  // Re-render every 30 seconds to update all relative timestamps
   timeUpdateInterval = setInterval(() => {
-    const timeAgoEl = document.getElementById('time-ago');
-    if (timeAgoEl) {
-      const areaStatus = getUserAreaStatus();
-      if (areaStatus?.lastUpdated) {
-        timeAgoEl.textContent = formatTimeAgo(areaStatus.lastUpdated);
-      }
-    }
+    render();
   }, 30000);
 
   // Listen for PWA install state changes

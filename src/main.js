@@ -60,6 +60,9 @@ async function init() {
   // Register service worker (non-blocking)
   registerServiceWorker();
 
+  // Render connection status UI
+  renderConnectionStatus();
+
   console.log('⚡ Up NEPA — Ready!');
 }
 
@@ -129,6 +132,48 @@ function urlBase64ToUint8Array(base64String) {
     outputArray[i] = rawData.charCodeAt(i);
   }
   return outputArray;
+}
+
+function renderConnectionStatus() {
+  const statusEl = document.createElement('div');
+  statusEl.id = 'connection-status';
+  statusEl.className = 'connection-status';
+  document.body.appendChild(statusEl);
+
+  let hideTimeout;
+
+  function updateStatus() {
+    if (!navigator.onLine) {
+      statusEl.textContent = 'No Internet Connection';
+      statusEl.className = 'connection-status offline active';
+      clearTimeout(hideTimeout);
+    } else {
+      const conn = navigator.connection || navigator.mozConnection || navigator.webkitConnection;
+      if (conn && (conn.effectiveType === '2g' || conn.effectiveType === 'slow-2g' || conn.downlink < 1)) {
+        statusEl.textContent = 'Poor Connection (May be delayed)';
+        statusEl.className = 'connection-status poor active';
+        clearTimeout(hideTimeout);
+      } else {
+        if (statusEl.classList.contains('active')) {
+          statusEl.textContent = 'Back Online';
+          statusEl.className = 'connection-status online active';
+          clearTimeout(hideTimeout);
+          hideTimeout = setTimeout(() => {
+            statusEl.classList.remove('active');
+          }, 3000);
+        }
+      }
+    }
+  }
+
+  window.addEventListener('online', updateStatus);
+  window.addEventListener('offline', updateStatus);
+  if (navigator.connection) {
+    navigator.connection.addEventListener('change', updateStatus);
+  }
+
+  // Initial check
+  updateStatus();
 }
 
 // ── Boot ────────────────────────────────────────────
