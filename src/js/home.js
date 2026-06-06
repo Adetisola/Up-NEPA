@@ -26,6 +26,7 @@ import { deferredPrompt, triggerAppInstall } from '../main.js';
 let unsubscribe = null;
 let timeUpdateInterval = null;
 let pwaEventsBound = false;
+let isInitialRender = true;
 
 /**
  * Render the home screen.
@@ -35,7 +36,7 @@ export function renderHome(container) {
   if (unsubscribe) unsubscribe();
   if (timeUpdateInterval) clearInterval(timeUpdateInterval);
 
-  function render() {
+  function renderFull() {
     const user = getUser();
     const area = getUserArea();
     const areaStatus = getUserAreaStatus();
@@ -47,21 +48,19 @@ export function renderHome(container) {
     container.innerHTML = `
       ${renderHeader(unreadCount)}
       <main class="home" role="main">
-        ${renderInstallBanner()}
-        ${renderStatusCard(areaStatus, area)}
-        ${renderReportButtons(areaStatus)}
-        ${renderNearbyAreas(nearbyStatuses)}
-        ${renderCollapsedAnalytics()}
-        ${renderPrediction(areaStatus)}
-        ${renderStreakBanner(streak)}
+        <div id="install-banner-container">${renderInstallBanner()}</div>
+        <div id="status-card-container">${renderStatusCard(areaStatus, area)}</div>
+        <div id="report-buttons-container">${renderReportButtons(areaStatus)}</div>
+        <div id="nearby-areas-container">${renderNearbyAreas(nearbyStatuses)}</div>
+        <div id="collapsed-analytics-container">${renderCollapsedAnalytics()}</div>
+        <div id="prediction-container">${renderPrediction(areaStatus)}</div>
+        <div id="streak-banner-container">${renderStreakBanner(streak)}</div>
       </main>
-      ${renderNotificationDrawer(notifications)}
+      <div id="drawer-container">${renderNotificationDrawer(notifications)}</div>
     `;
 
-    // Bind report button events
     bindReportButtons();
     
-    // Bind collapsed analytics click
     const analyticsBanner = document.getElementById('collapsed-analytics-banner');
     if (analyticsBanner) {
       analyticsBanner.addEventListener('click', () => {
@@ -69,22 +68,13 @@ export function renderHome(container) {
       });
     }
 
-    // Fetch analytics data asynchronously
     fetchCollapsedAnalytics(user);
-
-    // Bind header events
     bindHeaderEvents();
-    
-    // Bind drawer events
     bindNotificationDrawer();
 
-    // Bind install event
     const btnInstall = document.getElementById('btn-install-pwa');
-    if (btnInstall) {
-      btnInstall.addEventListener('click', triggerAppInstall);
-    }
+    if (btnInstall) btnInstall.addEventListener('click', triggerAppInstall);
     
-    // Bind dismiss install event
     const btnDismissInstall = document.getElementById('btn-dismiss-install');
     if (btnDismissInstall) {
       btnDismissInstall.addEventListener('click', () => {
@@ -95,31 +85,96 @@ export function renderHome(container) {
     }
   }
 
+  function updateGranular() {
+    const state = getState();
+    const user = getUser();
+    const area = getUserArea();
+    const areaStatus = getUserAreaStatus();
+    const nearbyStatuses = getNearbyStatuses();
+    const streak = user?.streak || 0;
+    const notifications = getNotifications();
+
+    // 1. Live Indicator
+    const liveDot = document.getElementById('live-indicator-dot');
+    if (liveDot) {
+      liveDot.style.display = state.online ? 'inline-block' : 'none';
+    }
+
+    // 2. Status Card with Slot Machine Animation
+    const statusCardContainer = document.getElementById('status-card-container');
+    if (statusCardContainer) {
+      const oldReportTextEl = document.getElementById('report-count');
+      const oldReportCount = oldReportTextEl ? parseInt(oldReportTextEl.dataset.count) || 0 : 0;
+      const newReportCount = areaStatus?.reportCount || 0;
+
+      // Update the card HTML
+      statusCardContainer.innerHTML = renderStatusCard(areaStatus, area);
+
+      // If count went up, trigger roll-up animation
+      if (newReportCount > oldReportCount) {
+        const newReportTextEl = document.getElementById('report-count');
+        if (newReportTextEl) {
+          const oldText = `Reported by ${oldReportCount} person${oldReportCount > 1 ? 's' : ''}`;
+          const newText = `Reported by ${newReportCount} person${newReportCount > 1 ? 's' : ''}`;
+          newReportTextEl.innerHTML = `<span class="roll-up-wrapper"><span class="roll-up-inner roll-up-anim"><span style="color:transparent;">${newText}</span><span style="position:absolute;top:0;">${oldText}</span><span style="position:absolute;top:100%;">${newText}</span></span></span>`;
+          
+          setTimeout(() => {
+            const el = document.getElementById('report-count');
+            if (el) el.innerHTML = newText;
+          }, 400);
+        }
+      }
+    }
+
+    // 3. Other containers (these don't flicker objectionably or don't have interactions that interrupt)
+    const nearbyContainer = document.getElementById('nearby-areas-container');
+    if (nearbyContainer) nearbyContainer.innerHTML = renderNearbyAreas(nearbyStatuses);
+
+    const predictionContainer = document.getElementById('prediction-container');
+    if (predictionContainer) predictionContainer.innerHTML = renderPrediction(areaStatus);
+    
+    const streakContainer = document.getElementById('streak-banner-container');
+    if (streakContainer) streakContainer.innerHTML = renderStreakBanner(streak);
+    
+    const drawerContainer = document.getElementById('drawer-container');
+    if (drawerContainer) {
+      drawerContainer.innerHTML = renderNotificationDrawer(notifications);
+      bindNotificationDrawer();
+    }
+
+    // Re-bind report buttons since container was potentially updated
+    bindReportButtons();
+  }
+
   // Initial render
-  render();
+  if (isInitialRender) {
+    renderFull();
+    isInitialRender = false;
+  } else {
+    updateGranular();
+  }
 
   // Subscribe to state changes for re-renders
   unsubscribe = subscribe(() => {
-    render();
+    updateGranular();
   });
 
-  // Re-render every 30 seconds to update all relative timestamps
+  // Re-render every 30 seconds to update relative timestamps
   timeUpdateInterval = setInterval(() => {
-    render();
+    updateGranular();
   }, 30000);
 
   // Listen for PWA install state changes
   if (!pwaEventsBound) {
-    window.addEventListener('pwa-install-ready', render);
-    window.addEventListener('pwa-install-done', render);
+    window.addEventListener('pwa-install-ready', () => { isInitialRender = true; renderHome(container); });
+    window.addEventListener('pwa-install-done', () => { isInitialRender = true; renderHome(container); });
     pwaEventsBound = true;
   }
 
-  // Return unmount hook
   return () => {
     if (unsubscribe) unsubscribe();
     if (timeUpdateInterval) clearInterval(timeUpdateInterval);
-    // Remove PWA listeners if we really wanted to, but they can persist
+    isInitialRender = true;
   };
 }
 
@@ -167,6 +222,7 @@ function renderHeader(unreadCount = 0) {
           <path d="M13 2L3 14h9l-1 10 10-12h-9l1-10z"/>
         </svg>
         <span class="header-logo-text">Up NEPA</span>
+        <div class="live-indicator" id="live-indicator-dot" style="display: none;"></div>
       </div>
       <div class="header-actions">
         <button class="header-btn" id="btn-notif" aria-label="Notifications" title="Notifications">

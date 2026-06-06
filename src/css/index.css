@@ -856,3 +856,65 @@
   stroke: var(--primary);
   transform: scale(1.1);
 }
+
+/* ==========================================================================
+   Map Visuals
+   ========================================================================== */
+.user-area-ring {
+  animation: pulse-amber-map 2s infinite cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+@keyframes pulse-amber-map {
+  0% {
+    stroke-width: 2px;
+    stroke-opacity: 1;
+  }
+  50% {
+    stroke-width: 6px;
+    stroke-opacity: 0.3;
+  }
+  100% {
+    stroke-width: 2px;
+    stroke-opacity: 1;
+  }
+}
+
+/* ==========================================================================
+   Micro-Animations (Anti-Flicker)
+   ========================================================================== */
+.live-indicator {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  background-color: var(--success);
+  border-radius: 50%;
+  margin-left: 8px;
+  box-shadow: 0 0 8px var(--success);
+  animation: pulse-live 2s infinite ease-in-out;
+}
+
+@keyframes pulse-live {
+  0% { opacity: 0.4; transform: scale(0.9); }
+  50% { opacity: 1; transform: scale(1.1); box-shadow: 0 0 12px var(--success); }
+  100% { opacity: 0.4; transform: scale(0.9); }
+}
+
+.roll-up-wrapper {
+  display: inline-block;
+  overflow: hidden;
+  vertical-align: bottom;
+}
+
+.roll-up-inner {
+  display: inline-flex;
+  flex-direction: column;
+}
+
+.roll-up-anim {
+  animation: roll-up 0.4s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+}
+
+@keyframes roll-up {
+  0% { transform: translateY(0); }
+  100% { transform: translateY(-50%); }
+}

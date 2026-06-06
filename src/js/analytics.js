@@ -12,7 +12,7 @@ export function renderAnalytics(container) {
       <div class="analytics-card card" style="text-align: center; margin-bottom: 20px;">
         <h3 style="color: var(--text-muted); font-size: 0.9rem;">Today's Estimated Supply</h3>
         <div style="font-size: 2.5rem; font-weight: 800; color: var(--primary); margin: 10px 0;">
-          <span id="supply-hours">0.0</span>h
+          <span id="supply-hours">0.0<span style="font-size: 1.2rem; margin-left: 4px;">h</span></span>
         </div>
         <p id="supply-trend" style="font-size: 0.85rem; color: var(--text-muted);">Collecting data...</p>
       </div>
@@ -65,8 +65,21 @@ async function fetchRealAnalytics(state) {
     const trendEl = document.getElementById('supply-trend');
     
     if (todayPattern && todayPattern.avg_duration_on != null && supplyEl) {
-      supplyEl.textContent = todayPattern.avg_duration_on.toFixed(1);
-      trendEl.textContent = `Based on ${todayPattern.sample_size} historical reports`;
+      if (todayPattern.avg_duration_on === 0) {
+        supplyEl.innerHTML = '0 <span style="font-size: 1.2rem;">mins</span>';
+        trendEl.textContent = `Not enough historical uptime data.`;
+      } else {
+        const totalMinutes = Math.round(todayPattern.avg_duration_on * 60);
+        const hrs = Math.floor(totalMinutes / 60);
+        const mins = totalMinutes % 60;
+        
+        let timeString = '';
+        if (hrs > 0) timeString += `${hrs}<span style="font-size: 1.2rem; margin-right: 4px;">h</span> `;
+        if (mins > 0 || hrs === 0) timeString += `${mins}<span style="font-size: 1.2rem;">m</span>`;
+        
+        supplyEl.innerHTML = timeString.trim();
+        trendEl.textContent = `Based on ${todayPattern.sample_size} historical reports`;
+      }
       trendEl.style.color = 'var(--text-muted)';
     }
 
