@@ -114,7 +114,7 @@ export async function fetchAreaStatuses() {
  * Get or create a user by device_id.
  * On first call, inserts a new user. On subsequent calls, returns existing.
  */
-export async function getOrCreateUser(devId, areaId) {
+export async function getOrCreateUser(devId, areaId, recoveryCode = null) {
   if (!supabase) return null;
 
   // Try to find existing user
@@ -136,7 +136,7 @@ export async function getOrCreateUser(devId, areaId) {
   // Create new user
   const { data: newUser, error: insertError } = await supabase
     .from('users')
-    .insert({ device_id: devId, area_id: areaId })
+    .insert({ device_id: devId, area_id: areaId, recovery_code: recoveryCode })
     .select()
     .single();
 
@@ -149,6 +149,22 @@ export async function getOrCreateUser(devId, areaId) {
   setDeviceId(devId);
 
   return newUser;
+}
+
+// ── Patterns (Prediction Engine) ────────────────────
+
+export async function getAreaPatterns(areaId) {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('patterns')
+    .select('*')
+    .eq('area_id', areaId);
+  
+  if (error) {
+    console.error('[Up NEPA] getAreaPatterns error:', error);
+    return [];
+  }
+  return data || [];
 }
 
 /**

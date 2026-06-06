@@ -1,60 +1,78 @@
-/* ======================================================
-   UP NEPA — Router
-   Simple hash-based SPA router
-   ====================================================== */
+import { renderHome } from './home.js';
+import { renderOnboarding } from './onboarding.js';
+import { renderSettings } from './settings.js';
+import { renderMap } from './map.js';
+import { renderAnalytics } from './analytics.js';
 
 const routes = {};
 let currentRoute = null;
+let currentUnmount = null;
 
-/**
- * Register a route handler.
- * @param {string} path - Route path (e.g., '/home', '/onboarding')
- * @param {Function} handler - Function called when route is active. Receives the app container.
- */
 export function route(path, handler) {
   routes[path] = handler;
 }
 
-/**
- * Navigate to a route.
- * @param {string} path - Route path
- */
+// Initialize routes immediately
+route('/home', renderHome);
+route('/onboarding', renderOnboarding);
+route('/settings', renderSettings);
+route('/map', renderMap);
+route('/analytics', renderAnalytics);
+
 export function navigate(path) {
   window.location.hash = path;
 }
 
-/**
- * Get the current route path.
- */
 export function getCurrentRoute() {
   return currentRoute;
 }
 
-/**
- * Start the router — listen for hash changes and render initial route.
- */
 export function startRouter() {
   function handleRoute() {
     const hash = window.location.hash.slice(1) || '/home';
     const app = document.getElementById('app');
+    const bottomNav = document.getElementById('bottom-nav');
 
     if (!app) return;
 
-    // Find matching route
+    if (hash === '/onboarding') {
+      if (bottomNav) bottomNav.style.display = 'none';
+    } else {
+      if (bottomNav) bottomNav.style.display = 'flex';
+      const tabName = hash.split('/')[1] || 'home';
+      document.querySelectorAll('.nav-item').forEach(item => {
+        if (item.dataset.tab === tabName) {
+          item.classList.add('active');
+        } else {
+          item.classList.remove('active');
+        }
+      });
+    }
+
     const handler = routes[hash];
+    let newUnmount = null;
+
+    if (currentUnmount) { 
+      currentUnmount(); 
+      currentUnmount = null; 
+    }
+
     if (handler) {
       currentRoute = hash;
-      handler(app);
+      newUnmount = handler(app);
     } else {
-      // Default fallback
       const fallback = routes['/home'] || Object.values(routes)[0];
       if (fallback) {
         currentRoute = '/home';
-        fallback(app);
+        newUnmount = fallback(app);
       }
+    }
+
+    if (newUnmount && typeof newUnmount === 'function') {
+      currentUnmount = newUnmount;
     }
   }
 
   window.addEventListener('hashchange', handleRoute);
-  handleRoute(); // Initial render
+  handleRoute();
 }

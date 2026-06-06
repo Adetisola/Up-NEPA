@@ -13,7 +13,7 @@
   position: sticky;
   top: 0;
   z-index: var(--z-header);
-  background: rgba(10, 10, 10, 0.85);
+  background: var(--bg-glass);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border-bottom: 1px solid var(--border);
@@ -54,6 +54,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  background: var(--surface);
   color: var(--text-secondary);
   transition: all var(--duration-fast);
 }
@@ -788,4 +789,70 @@
   .status-hero {
     padding: var(--space-3xl);
   }
+}
+
+/* ── App Shell & Bottom Navigation ─────────────────────────────── */
+#app-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  height: 100dvh;
+  width: 100%;
+}
+
+#app {
+  flex: 1;
+  width: 100%;
+  overflow-y: auto;
+  position: relative;
+  /* Add padding bottom to avoid content being hidden by nav */
+  padding-bottom: 70px;
+}
+
+.bottom-nav {
+  position: fixed;
+  bottom: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: calc(100% - 40px);
+  max-width: 400px;
+  height: 65px;
+  background-color: var(--bg-raised);
+  border: 1px solid var(--border-light);
+  border-radius: 40px;
+  display: flex;
+  justify-content: space-around;
+  align-items: center;
+  z-index: 1000;
+  box-shadow: var(--shadow-lg);
+  /* The padding-bottom safe area might distort the pill shape on iOS, so removing it or handling it inside */
+}
+
+.nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  color: var(--text-muted, #a1a1aa);
+  font-size: 0.7rem;
+  font-weight: 500;
+  flex: 1;
+  height: 100%;
+  transition: color 0.2s;
+  gap: 4px;
+}
+
+.nav-item svg {
+  stroke: currentColor;
+  transition: stroke 0.2s, transform 0.2s;
+}
+
+.nav-item.active {
+  color: var(--primary);
+}
+
+.nav-item.active svg {
+  stroke: var(--primary);
+  transform: scale(1.1);
 }

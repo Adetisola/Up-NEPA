@@ -14,6 +14,7 @@ import {
   getNotifications,
   getUnreadCount,
 } from './data/store.js';
+import { getAreaPatterns } from './data/supabase.js';
 import { renderStatusCard } from './components/status-card.js';
 import { renderNearbyAreas } from './components/nearby-area.js';
 import { renderStreakBanner } from './components/streak-banner.js';
@@ -50,6 +51,7 @@ export function renderHome(container) {
         ${renderStatusCard(areaStatus, area)}
         ${renderReportButtons(areaStatus)}
         ${renderNearbyAreas(nearbyStatuses)}
+        ${renderCollapsedAnalytics()}
         ${renderPrediction(areaStatus)}
         ${renderStreakBanner(streak)}
       </main>
@@ -58,6 +60,17 @@ export function renderHome(container) {
 
     // Bind report button events
     bindReportButtons();
+    
+    // Bind collapsed analytics click
+    const analyticsBanner = document.getElementById('collapsed-analytics-banner');
+    if (analyticsBanner) {
+      analyticsBanner.addEventListener('click', () => {
+        window.location.hash = '/analytics';
+      });
+    }
+
+    // Fetch analytics data asynchronously
+    fetchCollapsedAnalytics(user);
 
     // Bind header events
     bindHeaderEvents();
@@ -91,6 +104,13 @@ export function renderHome(container) {
     window.addEventListener('pwa-install-done', render);
     pwaEventsBound = true;
   }
+
+  // Return unmount hook
+  return () => {
+    if (unsubscribe) unsubscribe();
+    if (timeUpdateInterval) clearInterval(timeUpdateInterval);
+    // Remove PWA listeners if we really wanted to, but they can persist
+  };
 }
 
 function renderInstallBanner() {
@@ -208,5 +228,51 @@ function bindHeaderEvents() {
     btnSettings.addEventListener('click', () => {
       window.location.hash = '/settings';
     });
+  }
+}
+
+/**
+ * Render the collapsed analytics banner.
+ */
+function renderCollapsedAnalytics() {
+  return `
+    <div id="collapsed-analytics-banner" class="card" style="margin-bottom: var(--space-lg); padding: var(--space-base); display: flex; flex-direction: column; gap: 4px; cursor: pointer; transition: transform 0.2s, background 0.2s;">
+      <div style="display: flex; align-items: center; justify-content: space-between;">
+        <div style="display: flex; align-items: center; gap: 8px;">
+          <span style="font-size: 1.2rem;">📊</span>
+          <span id="collapsed-supply-text" style="font-weight: 600; font-size: 0.95rem;">Today: 0.0h supply</span>
+          <span id="collapsed-supply-trend" style="color: var(--text-muted); font-size: 0.8rem; margin-left: 4px;"></span>
+        </div>
+        <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>
+      <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">(tap to expand full dashboard)</div>
+    </div>
+  `;
+}
+
+/**
+ * Fetch and update the collapsed analytics banner.
+ */
+async function fetchCollapsedAnalytics(user) {
+  if (!user || !user.areaId) return;
+
+  try {
+    const patterns = await getAreaPatterns(user.areaId);
+    if (!patterns || patterns.length === 0) return;
+
+    const todayDow = new Date().getDay();
+    const todayPattern = patterns.find(p => p.day_of_week === todayDow);
+
+    const supplyText = document.getElementById('collapsed-supply-text');
+    const trendText = document.getElementById('collapsed-supply-trend');
+    
+    if (todayPattern && todayPattern.avg_duration_on != null && supplyText) {
+      supplyText.textContent = `Today: ${todayPattern.avg_duration_on.toFixed(1)}h supply`;
+      if (trendText) {
+        trendText.textContent = `(${todayPattern.sample_size} reports)`;
+      }
+    }
+  } catch (err) {
+    console.error('Error fetching collapsed analytics:', err);
   }
 }

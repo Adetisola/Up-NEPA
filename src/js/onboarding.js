@@ -32,7 +32,18 @@ function renderScreen(container) {
   bindScreenEvents(container);
 }
 
-function nextScreen(container) {
+async function nextScreen(container) {
+  if (currentScreen === 2 && selectedAreaId) {
+    // We are leaving the Notifications screen and entering the Done screen.
+    // Create the user now so we can display the recovery code on the Done screen.
+    const user = getUser();
+    if (!user || !user.recoveryCode) {
+      document.body.style.cursor = 'wait';
+      await createUser(selectedAreaId);
+      document.body.style.cursor = 'default';
+    }
+  }
+
   if (currentScreen < screens.length - 1) {
     currentScreen++;
     renderScreen(container);
@@ -53,10 +64,18 @@ function renderWelcome() {
           Know when light is coming — before it arrives.
           Community-powered electricity status for Magboro.
         </p>
-        <div class="onboarding-actions">
+        <div class="onboarding-actions" style="display: flex; flex-direction: column; gap: 15px;">
           <button class="btn btn-primary btn-block btn-lg" id="btn-get-started">
             Get Started
           </button>
+          
+          <div id="restore-section" style="margin-top: 10px;">
+            <a href="#" id="btn-show-restore" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline;">Restore previous session</a>
+            <div id="restore-form" style="display: none; margin-top: 15px;">
+              <input type="text" id="restore-code-input" placeholder="e.g. MGB-4X9" class="input" style="text-align: center; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px;">
+              <button class="btn btn-secondary btn-block" id="btn-restore-session">Restore</button>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -141,15 +160,23 @@ function renderNotifications() {
 // ── Screen 4: Done ──────────────────────────────────
 
 function renderDone() {
+  const user = getUser();
+  const recoveryCode = user?.recoveryCode || 'Loading...';
+
   return `
     <div class="onboarding" id="onboarding-screen">
       <div class="onboarding-content">
-        <div class="onboarding-bolt" style="animation: bolt-flash 0.8s ease-in-out infinite;">🎉</div>
-        <h1 class="onboarding-title">You're in!</h1>
+        <div class="onboarding-bolt">🎉</div>
+        <h1 class="onboarding-title">You're all set!</h1>
         <p class="onboarding-subtitle">
           Your area is set up. Start reporting to help your neighbours
           and build your streak.
         </p>
+        <div style="background: var(--surface-light); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px dashed var(--border);">
+          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px;">Your Secret Recovery Code</p>
+          <div style="font-size: 1.5rem; font-weight: 800; letter-spacing: 2px; color: var(--primary);">${recoveryCode}</div>
+          <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 5px;">Save this code. You can use it to restore your profile and streak if you switch browsers.</p>
+        </div>
         <div class="onboarding-actions">
           <button class="btn btn-primary btn-block btn-lg" id="btn-go-home">
             See Your Status →
@@ -187,6 +214,30 @@ function bindScreenEvents(container) {
   const btnStart = document.getElementById('btn-get-started');
   if (btnStart) {
     btnStart.addEventListener('click', () => nextScreen(container));
+  }
+  
+  const btnShowRestore = document.getElementById('btn-show-restore');
+  const restoreForm = document.getElementById('restore-form');
+  const btnRestore = document.getElementById('btn-restore-session');
+  const restoreInput = document.getElementById('restore-code-input');
+  
+  if (btnShowRestore) {
+    btnShowRestore.addEventListener('click', (e) => {
+      e.preventDefault();
+      restoreForm.style.display = 'block';
+      btnShowRestore.style.display = 'none';
+    });
+  }
+  
+  if (btnRestore) {
+    btnRestore.addEventListener('click', async () => {
+      const code = restoreInput.value.trim().toUpperCase();
+      if (!code) return;
+      
+      // In MVP, we would query Supabase for this code and restore device_id locally.
+      // For now, just navigate to home (a real implementation would call restoreUser(code))
+      alert('Session restore is a Phase 2 feature!');
+    });
   }
 
   // Screen 2: Area Selection
@@ -235,11 +286,7 @@ function bindScreenEvents(container) {
   // Screen 4: Go Home
   const btnHome = document.getElementById('btn-go-home');
   if (btnHome) {
-    btnHome.addEventListener('click', async () => {
-      // Create user with selected area
-      if (selectedAreaId) {
-        await createUser(selectedAreaId);
-      }
+    btnHome.addEventListener('click', () => {
       navigate('/home');
     });
   }

@@ -17,6 +17,7 @@ import {
   markAllNotificationsAsRead,
   subscribeToNotifications,
 } from './supabase.js';
+import { generateFingerprint, generateRecoveryCode } from '../utils/fingerprint.js';
 
 const STORAGE_KEY_USER = 'upnepa_user';
 const STORAGE_KEY_STREAK = 'upnepa_streak';
@@ -176,11 +177,13 @@ export function updateAreaStatusLocal(newStatus) {
 // ── User Management ─────────────────────────────────
 
 export async function createUser(areaId) {
-  const deviceId = crypto.randomUUID();
+  const deviceId = await generateFingerprint();
+  const recoveryCode = generateRecoveryCode();
 
   // Local user object
   const user = {
     deviceId,
+    recoveryCode,
     areaId,
     streak: 0,
     streakLastDate: null,
@@ -191,7 +194,7 @@ export async function createUser(areaId) {
   // Try to create in Supabase
   if (isSupabaseReady()) {
     setDeviceId(deviceId);
-    const dbUser = await sbGetOrCreateUser(deviceId, areaId);
+    const dbUser = await sbGetOrCreateUser(deviceId, areaId, recoveryCode);
     if (dbUser) {
       user.id = dbUser.id; // Store the server-side UUID
       state.online = true;
