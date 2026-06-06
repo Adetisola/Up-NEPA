@@ -99,6 +99,16 @@ export function renderSettings(container) {
         </div>
       </div>
 
+      <div class="settings-group" id="settings-app-group">
+        <div class="settings-group-label">App</div>
+        <div class="settings-item" id="btn-install-app" style="cursor: pointer; justify-content: space-between;">
+          <span class="settings-item-label" style="color: var(--amber);">Install App (Add to Home Screen)</span>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--amber);">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/>
+          </svg>
+        </div>
+      </div>
+
       <button class="btn btn-ghost btn-block" id="btn-reset" style="margin-top: var(--space-xl); color: var(--red);">
         Reset App Data
       </button>
@@ -118,9 +128,28 @@ function bindSettingsEvents() {
   // Area change
   const areaSelect = document.getElementById('settings-area-select');
   if (areaSelect) {
-    areaSelect.addEventListener('change', (e) => {
-      updateUserArea(e.target.value);
-      showToast('Area updated! 📍', 'success');
+    areaSelect.addEventListener('change', async (e) => {
+      const newAreaId = e.target.value;
+      const user = getUser();
+      if (newAreaId !== user?.areaId) {
+        showToast('Updating area...', 'info');
+        await updateUserArea(newAreaId);
+        showToast('Area updated successfully', 'success');
+      }
+    });
+  }
+
+  const btnInstallApp = document.getElementById('btn-install-app');
+  if (btnInstallApp) {
+    btnInstallApp.addEventListener('click', async () => {
+      // Import triggerAppInstall dynamically to avoid circular dependency issues if any
+      const { triggerAppInstall } = await import('../main.js');
+      try {
+        await triggerAppInstall();
+      } catch (err) {
+        console.error('Install failed:', err);
+        showToast('Could not open install prompt. You may need to install from browser menu.', 'error');
+      }
     });
   }
 

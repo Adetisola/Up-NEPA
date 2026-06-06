@@ -83,6 +83,16 @@ export function renderHome(container) {
     if (btnInstall) {
       btnInstall.addEventListener('click', triggerAppInstall);
     }
+    
+    // Bind dismiss install event
+    const btnDismissInstall = document.getElementById('btn-dismiss-install');
+    if (btnDismissInstall) {
+      btnDismissInstall.addEventListener('click', () => {
+        localStorage.setItem('installBannerDismissedAt', Date.now().toString());
+        const banner = document.getElementById('pwa-install-banner');
+        if (banner) banner.style.display = 'none';
+      });
+    }
   }
 
   // Initial render
@@ -114,9 +124,24 @@ export function renderHome(container) {
 }
 
 function renderInstallBanner() {
+  const dismissedAt = localStorage.getItem('installBannerDismissedAt');
+  if (dismissedAt) {
+    const daysSinceDismissed = (Date.now() - parseInt(dismissedAt, 10)) / (1000 * 60 * 60 * 24);
+    // Hide if dismissed less than 7 days ago
+    if (daysSinceDismissed < 7) {
+      return '';
+    }
+  }
+
   if (!deferredPrompt) return '';
+  
   return `
-    <div class="install-banner" id="pwa-install-banner">
+    <div class="install-banner" id="pwa-install-banner" style="position: relative;">
+      <button class="btn-dismiss-install" id="btn-dismiss-install" aria-label="Dismiss" style="position: absolute; top: 4px; right: 4px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
       <div class="install-banner-content">
         <span class="install-icon">📱</span>
         <div class="install-text">
