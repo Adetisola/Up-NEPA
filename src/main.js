@@ -10,7 +10,7 @@ import { renderHome } from './js/home.js';
 import { renderSettings } from './js/settings.js';
 
 // VAPID public key for push subscriptions
-const VAPID_PUBLIC_KEY = 'BHWgcj_JYaY3rdv5rFQbkxuJ0SbWWEyF-25j5lrCzTRxoUVu47hArUVubQWFHwa7o0_RbLQj8yqtCMnypZZMcoY';
+const VAPID_PUBLIC_KEY = 'BKXqYTbpcV_N6bhsaNQVxefW-j9jWDZdrPuf3wapR2yG4V4A5UimHAOBhPmPS_mK0irE0zfKUBdanWiQDLfIGPU';
 
 // ── PWA Install ─────────────────────────────────────
 export let deferredPrompt = null;

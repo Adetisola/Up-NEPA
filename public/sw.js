@@ -89,9 +89,15 @@ self.addEventListener('push', (event) => {
     }
   }
 
+  // Determine actions (use defaults if none provided in payload)
+  const notificationActions = data.actions || [
+    { action: 'report-on', title: '✅ YES it\'s up' },
+    { action: 'report-off', title: '❌ NO it\'s out' },
+  ];
+
   const options = {
     body: data.body,
-    icon: '/icons/icon-192.svg',
+    icon: '/icons/icon-192.png',
     badge: '/favicon.svg',
     vibrate: [100, 50, 100],
     tag: 'upnepa-status-check',
@@ -103,16 +109,7 @@ self.addEventListener('push', (event) => {
       deviceId: data.deviceId,
       url: '/',
     },
-    actions: [
-      {
-        action: 'report-on',
-        title: '✅ YES it\'s up',
-      },
-      {
-        action: 'report-off',
-        title: '❌ NO it\'s out',
-      },
-    ],
+    actions: notificationActions,
   };
 
   event.waitUntil(
