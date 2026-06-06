@@ -23,7 +23,10 @@ window.addEventListener('beforeinstallprompt', (e) => {
 });
 
 export async function triggerAppInstall() {
-  if (!deferredPrompt) return;
+  if (!deferredPrompt) {
+    alert("Install prompt is not available. Please ensure you are accessing the app via HTTPS (Secure Context) or use your browser's 'Add to Home Screen' menu.");
+    return;
+  }
   deferredPrompt.prompt();
   await deferredPrompt.userChoice;
   deferredPrompt = null;
