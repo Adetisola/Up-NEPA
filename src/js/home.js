@@ -6,6 +6,7 @@
 
 import {
   subscribe,
+  getState,
   getUserArea,
   getUserAreaStatus,
   getNearbyStatuses,

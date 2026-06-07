@@ -122,11 +122,13 @@ export async function initStore() {
 
       // 4. Update user in DB if they exist locally
       if (state.user && state.user.deviceId && state.user.areaId) {
+        setDeviceId(state.user.deviceId); // Set header before API call to satisfy RLS
         // Ensure user exists in DB
         const dbUser = await sbGetOrCreateUser(state.user.deviceId, state.user.areaId);
         if (dbUser) {
           state.user.id = dbUser.id;
           state.user.lastReported = dbUser.last_reported;
+          localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
         }
       }
 
