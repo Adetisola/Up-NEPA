@@ -290,19 +290,18 @@ export async function addReport(status) {
 
   // Optimistic area status update
   const areaStatus = state.statuses[state.user.areaId];
-  if (areaStatus) {
-    const newCount = (areaStatus.reportCount || 0) + 1;
-    state.statuses = {
-      ...state.statuses,
-      [state.user.areaId]: {
-        ...areaStatus,
-        currentStatus: status,
-        reportCount: newCount,
-        lastUpdated: report.createdAt,
-        confidence: Math.min(0.95, (areaStatus.confidence || 0.5) + 0.08),
-      },
-    };
-  }
+  const newCount = (areaStatus?.reportCount || 0) + 1;
+  state.statuses = {
+    ...state.statuses,
+    [state.user.areaId]: {
+      ...(areaStatus || {}),
+      areaId: state.user.areaId,
+      currentStatus: status,
+      reportCount: newCount,
+      lastUpdated: report.createdAt,
+      confidence: Math.min(0.95, (areaStatus?.confidence || 0.5) + 0.08),
+    },
+  };
 
   state.user.lastReported = report.createdAt;
   localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));

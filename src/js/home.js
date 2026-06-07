@@ -107,21 +107,27 @@ export function renderHome(container) {
       const oldReportCount = oldReportTextEl ? parseInt(oldReportTextEl.dataset.count) || 0 : 0;
       const newReportCount = areaStatus?.reportCount || 0;
 
-      // Update the card HTML
-      statusCardContainer.innerHTML = renderStatusCard(areaStatus, area);
+      // Update the card HTML if not currently animating a count-up
+      if (window.__upNepaAnimating && newReportCount === oldReportCount) {
+        // Skip destroying the DOM if the real-time update just matches our optimistic update
+      } else {
+        statusCardContainer.innerHTML = renderStatusCard(areaStatus, area);
 
-      // If count went up, trigger roll-up animation
-      if (newReportCount > oldReportCount) {
-        const newReportTextEl = document.getElementById('report-count');
-        if (newReportTextEl) {
-          const oldText = `Reported by ${oldReportCount} ${oldReportCount === 1 ? 'person' : 'people'}`;
-          const newText = `Reported by ${newReportCount} ${newReportCount === 1 ? 'person' : 'people'}`;
-          newReportTextEl.innerHTML = `<span class="roll-up-wrapper"><span class="roll-up-inner roll-up-anim"><span style="color:transparent;">${newText}</span><span style="position:absolute;top:0;">${oldText}</span><span style="position:absolute;top:100%;">${newText}</span></span></span>`;
-          
-          setTimeout(() => {
-            const el = document.getElementById('report-count');
-            if (el) el.innerHTML = newText;
-          }, 400);
+        // If count went up, trigger roll-up animation
+        if (newReportCount > oldReportCount) {
+          const newReportTextEl = document.getElementById('report-count');
+          if (newReportTextEl) {
+            window.__upNepaAnimating = true;
+            const oldText = `Reported by ${oldReportCount} ${oldReportCount === 1 ? 'person' : 'people'}`;
+            const newText = `Reported by ${newReportCount} ${newReportCount === 1 ? 'person' : 'people'}`;
+            newReportTextEl.innerHTML = `<span class="roll-up-wrapper"><span class="roll-up-inner roll-up-anim"><span style="color:transparent;">${newText}</span><span style="position:absolute;top:0;">${oldText}</span><span style="position:absolute;top:100%;">${newText}</span></span></span>`;
+            
+            setTimeout(() => {
+              const el = document.getElementById('report-count');
+              if (el) el.innerHTML = newText;
+              window.__upNepaAnimating = false;
+            }, 400);
+          }
         }
       }
     }
