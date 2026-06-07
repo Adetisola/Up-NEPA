@@ -114,8 +114,8 @@ export function renderHome(container) {
       if (newReportCount > oldReportCount) {
         const newReportTextEl = document.getElementById('report-count');
         if (newReportTextEl) {
-          const oldText = `Reported by ${oldReportCount} person${oldReportCount > 1 ? 's' : ''}`;
-          const newText = `Reported by ${newReportCount} person${newReportCount > 1 ? 's' : ''}`;
+          const oldText = `Reported by ${oldReportCount} ${oldReportCount === 1 ? 'person' : 'people'}`;
+          const newText = `Reported by ${newReportCount} ${newReportCount === 1 ? 'person' : 'people'}`;
           newReportTextEl.innerHTML = `<span class="roll-up-wrapper"><span class="roll-up-inner roll-up-anim"><span style="color:transparent;">${newText}</span><span style="position:absolute;top:0;">${oldText}</span><span style="position:absolute;top:100%;">${newText}</span></span></span>`;
           
           setTimeout(() => {

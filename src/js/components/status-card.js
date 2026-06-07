@@ -52,11 +52,9 @@ export function renderStatusCard(areaStatus, area) {
   }
 
   // Report count text
-  const reportText = areaStatus.reportCount === 1
-    ? 'Reported by 1 person'
-    : areaStatus.reportCount > 0
-      ? `Reported by ${areaStatus.reportCount} people`
-      : 'No reports yet';
+  const reportText = areaStatus.reportCount > 0
+    ? `Reported by ${areaStatus.reportCount} ${areaStatus.reportCount === 1 ? 'person' : 'people'}`
+    : 'No reports yet';
 
   return `
     <div class="status-hero ${heroClass}" id="status-card">
