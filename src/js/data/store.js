@@ -291,12 +291,18 @@ export async function addReport(status) {
   // Optimistic area status update
   const areaStatus = state.statuses[state.user.areaId];
   const newCount = (areaStatus?.reportCount || 0) + 1;
+  
+  let nextStatus = status;
+  if (newCount < 3) {
+    nextStatus = status === 'ON' ? 'LIKELY_ON' : 'LIKELY_OFF';
+  }
+
   state.statuses = {
     ...state.statuses,
     [state.user.areaId]: {
       ...(areaStatus || {}),
       areaId: state.user.areaId,
-      currentStatus: status,
+      currentStatus: nextStatus,
       reportCount: newCount,
       lastUpdated: report.createdAt,
       confidence: Math.min(0.95, (areaStatus?.confidence || 0.5) + 0.08),
