@@ -2,12 +2,16 @@
    UP NEPA — Main Entry Point
    ====================================================== */
 
+import { inject } from '@vercel/analytics';
 import { route, startRouter, navigate } from './js/router.js';
 import { initStore, hasUser, getUser } from './js/data/store.js';
 import { savePushSubscription } from './js/data/supabase.js';
 import { renderOnboarding } from './js/onboarding.js';
 import { renderHome } from './js/home.js';
 import { renderSettings } from './js/settings.js';
+
+// Initialize Vercel Analytics
+inject();
 
 // VAPID public key for push subscriptions
 const VAPID_PUBLIC_KEY = 'BKXqYTbpcV_N6bhsaNQVxefW-j9jWDZdrPuf3wapR2yG4V4A5UimHAOBhPmPS_mK0irE0zfKUBdanWiQDLfIGPU';
