@@ -53,6 +53,32 @@ serve(async (req) => {
           }
         }
       }
+    } else if (type === 'flash' && areaId) {
+      // ── FLASH SUPPLY TRIGGER ──────────────────────────────
+      console.log(`Evaluating flash supply trigger for area: ${areaId}`)
+      const { data: users } = await supabase
+        .from('users')
+        .select('id, push_subscription, area_id')
+        .eq('area_id', areaId)
+        .not('push_subscription', 'is', null)
+
+      if (users) {
+        for (const user of users) {
+          try {
+            await webpush.sendNotification(user.push_subscription, JSON.stringify({
+              title: "Up NEPA ⚡",
+              body: "Quick flash or stable supply? Help your neighbours know if light is still on 👀",
+              areaId: user.area_id,
+              userId: user.id,
+              actions: [
+                { action: 'report-on', title: '✅ Still on' },
+                { action: 'report-off', title: '❌ Went off again' }
+              ]
+            }))
+            notificationsSent++
+          } catch (e) {}
+        }
+      }
     } else if (type === 'stale') {
       // ── STALE DATA TRIGGER ────────────────────────────────
       // Run every hour. Find users whose area was reported ON > 3 hours ago.

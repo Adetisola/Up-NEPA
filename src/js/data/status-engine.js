@@ -100,13 +100,13 @@ export function calculateAreaStatus(reports) {
  */
 export function getStatusLabel(status) {
   switch (status) {
-    case 'ON': return 'Light Is Up';
-    case 'OFF': return 'Light Is Out';
-    case 'LIKELY_ON': return 'Likely Up';
-    case 'LIKELY_OFF': return 'Likely Out';
+    case 'ON': return 'LIGHT IS UP';
+    case 'OFF': return 'LIGHT IS OUT';
+    case 'LIKELY_ON': return 'POSSIBLE — UNCONFIRMED';
+    case 'LIKELY_OFF': return 'PROBABLY OUT';
+    case 'UNSTABLE': return 'UNSTABLE / FLICKERING';
     case 'UNCONFIRMED':
-    default:
-      return 'Unconfirmed';
+    default: return 'UNCONFIRMED';
   }
 }
 
@@ -116,8 +116,10 @@ export function getStatusLabel(status) {
 export function getStatusType(status) {
   switch (status) {
     case 'ON':
-    case 'LIKELY_ON':
       return 'on';
+    case 'LIKELY_ON':
+    case 'UNSTABLE':
+      return 'amber';
     case 'OFF':
     case 'LIKELY_OFF':
       return 'off';
@@ -133,6 +135,7 @@ export function getStatusIcon(status) {
   switch (status) {
     case 'ON':
     case 'LIKELY_ON':
+    case 'UNSTABLE':
       return '⚡';
     case 'OFF':
     case 'LIKELY_OFF':
@@ -148,9 +151,11 @@ export function getStatusIcon(status) {
 export function getStatusShort(status) {
   switch (status) {
     case 'ON': return 'ON';
+    case 'LIKELY_ON': return 'POSS';
+    case 'UNSTABLE': return 'FLSH';
     case 'OFF': return 'OFF';
-    case 'LIKELY_ON': return '~ON';
-    case 'LIKELY_OFF': return '~OFF';
+    case 'LIKELY_OFF': return 'OFF?';
+    case 'UNCONFIRMED':
     default: return '—';
   }
 }

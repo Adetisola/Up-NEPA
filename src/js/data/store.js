@@ -295,8 +295,10 @@ export async function addReport(status) {
   const newCount = (areaStatus?.reportCount || 0) + 1;
   
   let nextStatus = status;
-  if (newCount < 3) {
-    nextStatus = status === 'ON' ? 'LIKELY_ON' : 'LIKELY_OFF';
+  if (status === 'ON' && areaStatus?.currentStatus !== 'ON') {
+    nextStatus = 'LIKELY_ON'; // Backend enforces 10-min wait
+  } else if (newCount < 3 && status !== 'ON') {
+    nextStatus = 'LIKELY_OFF';
   }
 
   state.statuses = {

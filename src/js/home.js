@@ -15,7 +15,7 @@ import {
   getNotifications,
   getUnreadCount,
 } from './data/store.js';
-import { getAreaPatterns } from './data/supabase.js';
+import { getAreaPatterns, getDailyAnalytics } from './data/supabase.js';
 import { renderStatusCard } from './components/status-card.js';
 import { renderNearbyAreas } from './components/nearby-area.js';
 import { renderStreakBanner } from './components/streak-banner.js';
@@ -65,7 +65,11 @@ export function renderHome(container) {
     const analyticsBanner = document.getElementById('collapsed-analytics-banner');
     if (analyticsBanner) {
       analyticsBanner.addEventListener('click', () => {
-        window.location.hash = '/analytics';
+        const panel = document.getElementById('expanded-analytics-panel');
+        if (panel) {
+          const isHidden = panel.style.display === 'none';
+          panel.style.display = isHidden ? 'block' : 'none';
+        }
       });
     }
 
@@ -287,11 +291,11 @@ function renderPrediction(areaStatus) {
   let icon;
 
   if (isOff) {
-    predictionText = `Not enough data for your area yet — <em>help us by reporting daily</em>. With more reports, we'll predict when light usually comes back.`;
+    predictionText = `Power in your area doesn't follow a consistent pattern yet. Keep reporting — predictions improve with more data.`;
     icon = '🔮';
   } else {
-    predictionText = `We're collecting patterns for your area. Keep reporting and we'll show <em>when light usually comes and goes</em>.`;
-    icon = '📊';
+    predictionText = `Your area is most reliable overnight. If you need stable power, evenings after 10pm are your best window.`;
+    icon = '🌙';
   }
 
   return `
@@ -320,7 +324,7 @@ function bindHeaderEvents() {
 }
 
 /**
- * Render the collapsed analytics banner.
+ * Render the collapsed analytics banner and the expandable dashboard shell.
  */
 function renderCollapsedAnalytics() {
   return `
@@ -328,37 +332,114 @@ function renderCollapsedAnalytics() {
       <div style="display: flex; align-items: center; justify-content: space-between;">
         <div style="display: flex; align-items: center; gap: 8px;">
           <span style="font-size: 1.2rem;">📊</span>
-          <span id="collapsed-supply-text" style="font-weight: 600; font-size: 0.95rem;">Today: 0.0h supply</span>
+          <span id="collapsed-supply-text" style="font-weight: 600; font-size: 0.95rem;">Today: 0h supply</span>
           <span id="collapsed-supply-trend" style="color: var(--text-muted); font-size: 0.8rem; margin-left: 4px;"></span>
         </div>
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
       <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">(tap to expand full dashboard)</div>
     </div>
+    
+    <div id="expanded-analytics-panel" class="card" style="display: none; padding: var(--space-lg); margin-bottom: var(--space-lg); animation: slide-down 0.3s ease-out;">
+      <h3 style="margin-bottom: var(--space-md); font-size: 1.1rem; color: var(--amber);">Area Analytics</h3>
+      <div id="analytics-content">
+        <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem; padding: var(--space-xl) 0;">
+          Loading analytics...
+        </div>
+      </div>
+    </div>
   `;
 }
 
 /**
- * Fetch and update the collapsed analytics banner.
+ * Fetch and update the analytics dashboard.
  */
 async function fetchCollapsedAnalytics(user) {
   if (!user || !user.areaId) return;
 
   try {
-    const patterns = await getAreaPatterns(user.areaId);
-    if (!patterns || patterns.length === 0) return;
-
-    const todayDow = new Date().getDay();
-    const todayPattern = patterns.find(p => p.day_of_week === todayDow);
-
+    const [patterns, daily] = await Promise.all([
+      getAreaPatterns(user.areaId),
+      getDailyAnalytics(user.areaId)
+    ]);
+    
     const supplyText = document.getElementById('collapsed-supply-text');
     const trendText = document.getElementById('collapsed-supply-trend');
-    
-    if (todayPattern && todayPattern.avg_duration_on != null && supplyText) {
-      supplyText.textContent = `Today: ${todayPattern.avg_duration_on.toFixed(1)}h supply`;
-      if (trendText) {
-        trendText.textContent = `(${todayPattern.sample_size} reports)`;
+    const content = document.getElementById('analytics-content');
+
+    if (!daily || daily.length === 0) {
+      if (content) {
+        content.innerHTML = `
+          <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem;">
+            Not enough data yet for your area — keep reporting and analytics will appear here 📊
+          </div>
+        `;
       }
+      return;
+    }
+
+    const todayData = daily[0];
+    const ydayData = daily.length > 1 ? daily[1] : null;
+
+    if (supplyText) {
+      supplyText.textContent = `Today: ${todayData.supply_hours.toFixed(1)}h supply`;
+      if (trendText && ydayData) {
+        const diff = todayData.supply_hours - ydayData.supply_hours;
+        trendText.textContent = diff >= 0 ? `↑ +${diff.toFixed(1)}h vs yday` : `↓ ${diff.toFixed(1)}h vs yday`;
+        trendText.style.color = diff >= 0 ? 'var(--green)' : 'var(--amber)';
+      }
+    }
+    
+    if (content) {
+      // Build 7-day chart bars
+      const maxHours = 24;
+      let chartHtml = '<div style="display: flex; align-items: flex-end; justify-content: space-between; height: 100px; margin-bottom: var(--space-md); padding-bottom: var(--space-sm); border-bottom: 1px solid var(--border);">';
+      
+      // Reverse array to show oldest to newest (left to right)
+      const reversedDaily = [...daily].reverse();
+      
+      reversedDaily.forEach(d => {
+        const heightPct = (d.supply_hours / maxHours) * 100;
+        const color = d.supply_hours >= 12 ? 'var(--green)' : 'var(--amber)'; // simple average logic for MVP
+        const dayLabel = new Date(d.date).toLocaleDateString('en-US', { weekday: 'short' });
+        
+        chartHtml += `
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1;">
+            <div style="width: 100%; display: flex; justify-content: center; height: 80px; align-items: flex-end;">
+              <div style="width: 16px; background-color: ${color}; height: ${Math.max(2, heightPct)}%; border-radius: 4px 4px 0 0;"></div>
+            </div>
+            <div style="font-size: 0.6rem; color: var(--text-muted);">${dayLabel}</div>
+          </div>
+        `;
+      });
+      chartHtml += '</div>';
+
+      content.innerHTML = `
+        ${chartHtml}
+        
+        <div style="display: grid; grid-template-columns: 1fr; gap: var(--space-md); margin-top: var(--space-lg);">
+          
+          <div style="background: var(--bg-surface); padding: var(--space-md); border-radius: var(--radius-md);">
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Fragmentation Score</div>
+            <div style="font-size: 1.1rem; font-weight: 600;">${todayData.fragmentation_score || 'Stable'}</div>
+            <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Fragmented means power came in short bursts.</div>
+          </div>
+          
+          <div style="background: var(--bg-surface); padding: var(--space-md); border-radius: var(--radius-md);">
+            <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Outage Frequency</div>
+            <div style="font-size: 1.1rem; font-weight: 600;">${todayData.interruptions || 0} outages today</div>
+          </div>
+          
+          ${todayData.flash_count > 0 ? `
+          <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); padding: var(--space-md); border-radius: var(--radius-md);">
+            <div style="font-size: 0.75rem; color: var(--amber); margin-bottom: 4px; text-transform: uppercase; font-weight: bold;">⚠️ Flash Supplies Detected</div>
+            <div style="font-size: 1.1rem; font-weight: 600; color: var(--amber);">${todayData.flash_count} short bursts today</div>
+            <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">These short bursts can damage appliances — unplug sensitive electronics during unstable periods.</div>
+          </div>
+          ` : ''}
+          
+        </div>
+      `;
     }
   } catch (err) {
     console.error('Error fetching collapsed analytics:', err);

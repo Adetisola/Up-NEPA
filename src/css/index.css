@@ -138,6 +138,20 @@
   animation: pulse-green 3s ease-in-out infinite;
 }
 
+.status-hero.status-amber {
+  background: var(--bg-card);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+  box-shadow: 0 0 40px rgba(245, 158, 11, 0.05);
+}
+
+.status-hero.status-amber::before {
+  background: var(--amber);
+}
+
+.status-hero.status-amber.fresh {
+  animation: pulse-amber 3s ease-in-out infinite;
+}
+
 .status-hero.status-off {
   background: var(--bg-card);
   border: 1px solid rgba(239, 68, 68, 0.2);

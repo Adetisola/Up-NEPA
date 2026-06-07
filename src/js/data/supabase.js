@@ -168,6 +168,25 @@ export async function getAreaPatterns(areaId) {
 }
 
 /**
+ * Fetch daily analytics for an area.
+ */
+export async function getDailyAnalytics(areaId) {
+  if (!supabase) return [];
+  const { data, error } = await supabase
+    .from('daily_analytics')
+    .select('*')
+    .eq('area_id', areaId)
+    .order('date', { ascending: false })
+    .limit(7);
+  
+  if (error) {
+    console.error('[Up NEPA] getDailyAnalytics error:', error);
+    return [];
+  }
+  return data || [];
+}
+
+/**
  * Update a user's area.
  */
 export async function updateUser(userId, updates) {
