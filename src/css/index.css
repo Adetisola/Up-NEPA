@@ -831,7 +831,9 @@
   width: calc(100% - 40px);
   max-width: 400px;
   height: 65px;
-  background-color: var(--bg-raised);
+  background: var(--bg-glass);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border-light);
   border-radius: 40px;
   display: flex;

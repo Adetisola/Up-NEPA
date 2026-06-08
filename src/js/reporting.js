@@ -69,7 +69,7 @@ function triggerHaptic(intensity = 'medium') {
 
   const patterns = {
     light: [10],
-    medium: [30],
+    medium: [50, 100, 50],
     heavy: [50, 30, 50],
   };
 
@@ -91,6 +91,9 @@ export function bindReportButtons() {
   if (btnOn && !btnOn.dataset.bound) {
     btnOn.addEventListener('click', (e) => {
       e.preventDefault();
+      btnOn.classList.remove('burst-on');
+      void btnOn.offsetWidth; // Force reflow
+      btnOn.classList.add('burst-on');
       submitReport('ON');
     });
     btnOn.dataset.bound = 'true';
@@ -99,6 +102,9 @@ export function bindReportButtons() {
   if (btnOff && !btnOff.dataset.bound) {
     btnOff.addEventListener('click', (e) => {
       e.preventDefault();
+      btnOff.classList.remove('burst-off');
+      void btnOff.offsetWidth; // Force reflow
+      btnOff.classList.add('burst-off');
       submitReport('OFF');
     });
     btnOff.dataset.bound = 'true';
