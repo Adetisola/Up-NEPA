@@ -29,6 +29,7 @@ export function initSupabase(currentDeviceId) {
 
   supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     global: { headers },
+    auth: { persistSession: false }
   });
 
   console.log('[Up NEPA] Supabase connected');
@@ -44,6 +45,7 @@ export function setDeviceId(newDeviceId) {
   if (window.supabase) {
     supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
       global: { headers: { 'x-device-id': deviceId } },
+      auth: { persistSession: false }
     });
   }
 }
