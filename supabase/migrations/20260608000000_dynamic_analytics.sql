@@ -89,12 +89,18 @@ BEGIN
     SELECT COUNT(*) as count
     FROM public.flash_events
     WHERE area_id = p_area_id AND created_at >= CURRENT_DATE - INTERVAL '6 days'
+  ),
+  total_reports AS (
+    SELECT COUNT(*) as count
+    FROM public.reports
+    WHERE area_id = p_area_id
   )
   SELECT json_build_object(
     'daily_stats', COALESCE((SELECT json_agg(row_to_json(daily_stats)) FROM daily_stats), '[]'::json),
     'current_session', (SELECT row_to_json(current_session) FROM current_session),
     'longest_streak', (SELECT row_to_json(longest_streak) FROM longest_streak),
-    'flash_count', COALESCE((SELECT count FROM flash_count), 0)
+    'flash_count', COALESCE((SELECT count FROM flash_count), 0),
+    'total_reports', COALESCE((SELECT count FROM total_reports), 0)
   ) INTO v_result;
 
   RETURN v_result;

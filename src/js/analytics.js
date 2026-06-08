@@ -1,5 +1,5 @@
 import { getState, subscribe } from './data/store.js';
-import { getAreaPatterns } from './data/supabase.js';
+import { getExpandedAnalytics, getTodaySupplySummary } from './data/supabase.js';
 
 export function renderAnalytics(container) {
   const state = getState();
@@ -8,29 +8,19 @@ export function renderAnalytics(container) {
     <header class="header">
       <div class="header-logo" style="font-weight: 800; font-size: var(--fs-xl);">Analytics</div>
     </header>
-    <div class="container" style="padding-top: 10px;">
+    <div class="container" style="padding-top: 10px; padding-bottom: 80px;">
       <div class="analytics-card card" style="text-align: center; margin-bottom: 20px;">
-        <h3 style="color: var(--text-muted); font-size: 0.9rem;">Today's Estimated Supply</h3>
+        <h3 style="color: var(--text-muted); font-size: 0.9rem;">Today's Supply</h3>
         <div style="font-size: 2.5rem; font-weight: 800; color: var(--primary); margin: 10px 0;">
           <span id="supply-hours">0.0<span style="font-size: 1.2rem; margin-left: 4px;">h</span></span>
         </div>
         <p id="supply-trend" style="font-size: 0.85rem; color: var(--text-muted);">Collecting data...</p>
       </div>
 
-      <div class="card" style="margin-bottom: 20px;">
-        <h3 style="margin-bottom: 15px; font-size: 1rem;">Past 7 Days</h3>
-        <div id="analytics-chart" class="bar-chart" style="display: flex; align-items: flex-end; justify-content: space-between; height: 150px; padding-bottom: 20px; border-bottom: 1px solid var(--border);">
-          <div style="width: 100%; text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 20px;">
-            Not enough data to show chart
-          </div>
+      <div id="analytics-content">
+        <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem; padding: var(--space-xl) 0;">
+          Loading analytics...
         </div>
-      </div>
-
-      <div class="card">
-        <h3 style="margin-bottom: 10px; font-size: 1rem;">Insights</h3>
-        <ul id="analytics-insights" style="list-style: none; font-size: 0.9rem; color: var(--text-muted);">
-          <li style="padding: 10px 0; text-align: center;">Need more community reports to generate insights.</li>
-        </ul>
       </div>
     </div>
   `;
@@ -49,87 +39,150 @@ function updateAnalytics(state) {
   // Synchronous UI updates based on local state if needed
 }
 
+function formatDuration(hours) {
+  if (hours < 1) {
+    const mins = Math.round(hours * 60);
+    return `${mins} mins`;
+  }
+  return `${hours.toFixed(1)}h`;
+}
+
 async function fetchRealAnalytics(state) {
   const user = state.user;
   if (!user || !user.areaId) return;
 
   try {
-    const patterns = await getAreaPatterns(user.areaId);
-    if (!patterns || patterns.length === 0) return; // Leave as 0.0 if empty
-
-    const todayDow = new Date().getDay(); // 0 is Sunday
-    const todayPattern = patterns.find(p => p.day_of_week === todayDow);
-
-    // Update Today's Estimated Supply
-    const supplyEl = document.getElementById('supply-hours');
-    const trendEl = document.getElementById('supply-trend');
+    const summary = await getTodaySupplySummary(user.areaId);
+    let todayHours = summary ? summary.today_supply_hours : 0;
     
-    if (todayPattern && todayPattern.avg_duration_on != null && supplyEl) {
-      if (todayPattern.avg_duration_on === 0) {
-        supplyEl.innerHTML = '0 <span style="font-size: 1.2rem;">mins</span>';
-        trendEl.textContent = `Not enough historical uptime data.`;
+    const data = await getExpandedAnalytics(user.areaId);
+
+    const supplyEl = document.getElementById('supply-hours');
+    if (supplyEl) {
+      if (todayHours < 1) {
+        supplyEl.innerHTML = `${Math.round(todayHours * 60)}<span style="font-size: 1.2rem; margin-left: 4px;">mins</span>`;
       } else {
-        const totalMinutes = Math.round(todayPattern.avg_duration_on * 60);
-        const hrs = Math.floor(totalMinutes / 60);
-        const mins = totalMinutes % 60;
-        
-        let timeString = '';
-        if (hrs > 0) timeString += `${hrs}<span style="font-size: 1.2rem; margin-right: 4px;">h</span> `;
-        if (mins > 0 || hrs === 0) timeString += `${mins}<span style="font-size: 1.2rem;">m</span>`;
-        
-        supplyEl.innerHTML = timeString.trim();
-        trendEl.textContent = `Based on ${todayPattern.sample_size} historical reports`;
+        supplyEl.innerHTML = `${todayHours.toFixed(1)}<span style="font-size: 1.2rem; margin-left: 4px;">h</span>`;
       }
-      trendEl.style.color = 'var(--text-muted)';
+    }
+    
+    const content = document.getElementById('analytics-content');
+    if (!data) return;
+
+    // Threshold check
+    const totalReports = data.total_reports || 0;
+    const trendEl = document.getElementById('supply-trend');
+    if (trendEl) {
+      trendEl.textContent = `${totalReports} total reports in your area`;
     }
 
-    // Update Chart
-    const chartEl = document.getElementById('analytics-chart');
-    if (chartEl && patterns.length > 0) {
-      const days = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-      let maxDuration = Math.max(...patterns.map(p => p.avg_duration_on || 0));
-      if (maxDuration < 1) maxDuration = 1; // Prevent div by zero
-      
-      // Reorder days so today is last
-      const orderedDays = [];
-      for (let i = 1; i <= 7; i++) {
-        orderedDays.push((todayDow + i) % 7);
-      }
+    if (totalReports < 10) {
+      content.innerHTML = `
+        <div class="card" style="text-align: center; padding: var(--space-xl) var(--space-md);">
+          <div style="font-size: 2rem; margin-bottom: 10px;">📊</div>
+          <div style="font-weight: 600; margin-bottom: 5px;">Analytics are building</div>
+          <div style="color: var(--text-muted); font-size: 0.9rem;">
+            Need at least 10 reports to generate historical insights. (Currently at ${totalReports}/10)
+          </div>
+        </div>
+      `;
+      return;
+    }
 
-      chartEl.innerHTML = orderedDays.map(dow => {
-        const p = patterns.find(x => x.day_of_week === dow);
-        const duration = p ? (p.avg_duration_on || 0) : 0;
-        const height = (duration / maxDuration) * 100;
-        const isToday = dow === todayDow;
+    // Render full rich dashboard
+    let chartHtml = `
+      <div class="card" style="margin-bottom: 20px;">
+        <h3 style="margin-bottom: 15px; font-size: 1rem;">Past 7 Days</h3>
+        <div class="bar-chart" style="display: flex; align-items: flex-end; justify-content: space-between; height: 140px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
+    `;
+
+    const dailyStats = typeof data.daily_stats === 'string' ? JSON.parse(data.daily_stats) : (data.daily_stats || []);
+    let maxHours = Math.max(...dailyStats.map(d => d.on_hours || 0), 1);
+    if (maxHours < 2) maxHours = 2;
+
+    const reversedDaily = [...dailyStats].reverse(); 
+    
+    if (reversedDaily.length === 0) {
+       chartHtml += '<div style="width: 100%; text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 20px;">No historical data available</div>';
+    } else {
+      reversedDaily.forEach(d => {
+        const heightPct = ((d.on_hours || 0) / maxHours) * 100;
+        const color = (d.on_hours || 0) >= 12 ? 'var(--green)' : 'var(--amber)';
+        const dayLabel = new Date(d.report_date).toLocaleDateString('en-US', { weekday: 'short' });
         
-        return `
-          <div style="display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: 1; height: 100%;">
-            <div style="height: ${height}%; width: 20px; background-color: ${isToday ? 'var(--primary)' : 'var(--surface-light)'}; border-radius: 4px 4px 0 0; min-height: 4px;"></div>
-            <span style="font-size: 0.7rem; color: var(--text-muted); margin-top: 5px;">${days[dow]}</span>
+        chartHtml += `
+          <div style="display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; height: 100%;">
+            <div style="width: 100%; display: flex; justify-content: center; height: 100px; align-items: flex-end;">
+              <div style="width: 16px; background-color: ${color}; height: ${Math.max(2, heightPct)}%; border-radius: 4px 4px 0 0;"></div>
+            </div>
+            <div style="font-size: 0.6rem; color: var(--text-muted);">${dayLabel}</div>
           </div>
         `;
-      }).join('');
+      });
+    }
+    chartHtml += '</div></div>';
+
+    const todayStat = dailyStats.length > 0 ? dailyStats[0] : {};
+    const interruptions = todayStat.interruptions || 0;
+    let fragScore = 'Stable';
+    if (interruptions >= 4) fragScore = 'Highly Fragmented';
+    else if (interruptions >= 2) fragScore = 'Moderate';
+    else if (interruptions === 0 && (todayStat.on_hours || 0) === 0) fragScore = 'No Supply';
+
+    let currentSessionStr = 'Unknown';
+    if (data.current_session) {
+      const durStr = formatDuration(data.current_session.duration_hours || 0);
+      if (data.current_session.status === 'ON' || data.current_session.status === 'LIKELY_ON') {
+        currentSessionStr = `Power has been on for ${durStr}`;
+      } else {
+        currentSessionStr = `Power has been out for ${durStr}`;
+      }
+    }
+    
+    let longestStreakStr = 'N/A';
+    if (data.longest_streak && data.longest_streak.duration_hours) {
+       longestStreakStr = `${formatDuration(data.longest_streak.duration_hours)} (on ${new Date(data.longest_streak.streak_date).toLocaleDateString()})`;
     }
 
-    // Update Insights
-    const insightsEl = document.getElementById('analytics-insights');
-    if (insightsEl && patterns.length > 0) {
-      // Find day with max duration
-      let bestPattern = patterns[0];
-      for (const p of patterns) {
-        if ((p.avg_duration_on || 0) > (bestPattern.avg_duration_on || 0)) {
-          bestPattern = p;
-        }
-      }
+    content.innerHTML = `
+      ${chartHtml}
       
-      const days = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
-      
-      insightsEl.innerHTML = `
-        <li style="padding: 10px 0; border-bottom: 1px solid var(--border);">⚡ Power is usually best on <strong>${days[bestPattern.day_of_week]}s</strong></li>
-        <li style="padding: 10px 0;">📊 <strong>${patterns.reduce((sum, p) => sum + (p.sample_size || 0), 0)}</strong> total community reports collected for your area.</li>
-      `;
-    }
+      <div style="display: grid; grid-template-columns: 1fr; gap: var(--space-md); margin-top: var(--space-lg);">
+        
+        <div style="background: var(--bg-surface); padding: var(--space-md); border-radius: var(--radius-md);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Current Session</div>
+          <div style="font-size: 1.1rem; font-weight: 600;">${currentSessionStr}</div>
+        </div>
+
+        <div style="background: var(--bg-surface); padding: var(--space-md); border-radius: var(--radius-md);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Fragmentation Score</div>
+          <div style="font-size: 1.1rem; font-weight: 600;">${fragScore}</div>
+          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Fragmented means power came in short bursts.</div>
+        </div>
+        
+        <div style="background: var(--bg-surface); padding: var(--space-md); border-radius: var(--radius-md);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Longest Streak This Month</div>
+          <div style="font-size: 1.1rem; font-weight: 600;">${longestStreakStr}</div>
+        </div>
+
+        <div style="background: var(--bg-surface); padding: var(--space-md); border-radius: var(--radius-md);">
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Outage Frequency</div>
+          <div style="font-size: 1.1rem; font-weight: 600;">${interruptions} outages today</div>
+        </div>
+        
+        ${data.flash_count > 0 ? `
+        <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); padding: var(--space-md); border-radius: var(--radius-md);">
+          <div style="font-size: 0.75rem; color: var(--amber); margin-bottom: 4px; text-transform: uppercase; font-weight: bold;">⚠️ Flash Supplies Detected</div>
+          <div style="font-size: 1.1rem; font-weight: 600; color: var(--amber);">${data.flash_count} short bursts this week</div>
+          <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">These short bursts can damage appliances — unplug sensitive electronics during unstable periods.</div>
+        </div>
+        ` : ''}
+        
+      </div>
+    `;
   } catch (err) {
-    console.error('Error fetching analytics:', err);
+    console.error('Error fetching expanded analytics:', err);
+    const content = document.getElementById('analytics-content');
+    if (content) content.innerHTML = '<div style="color: var(--amber); text-align: center;">Failed to load analytics</div>';
   }
 }

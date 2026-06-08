@@ -65,14 +65,7 @@ export function renderHome(container) {
     const analyticsBanner = document.getElementById('collapsed-analytics-banner');
     if (analyticsBanner) {
       analyticsBanner.addEventListener('click', () => {
-        const panel = document.getElementById('expanded-analytics-panel');
-        if (panel) {
-          const isHidden = panel.style.display === 'none';
-          panel.style.display = isHidden ? 'block' : 'none';
-          if (isHidden && !panel.dataset.loaded) {
-            fetchExpandedAnalytics(user);
-          }
-        }
+        window.location.hash = '/analytics';
       });
     }
 
@@ -327,7 +320,7 @@ function bindHeaderEvents() {
 }
 
 /**
- * Render the collapsed analytics banner and the expandable dashboard shell.
+ * Render the collapsed analytics banner.
  */
 function renderCollapsedAnalytics() {
   return `
@@ -340,16 +333,7 @@ function renderCollapsedAnalytics() {
         </div>
         <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--text-muted);"><polyline points="9 18 15 12 9 6"/></svg>
       </div>
-      <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">(tap to expand full dashboard)</div>
-    </div>
-    
-    <div id="expanded-analytics-panel" class="card" style="display: none; padding: var(--space-lg); margin-bottom: var(--space-lg); animation: slide-down 0.3s ease-out;">
-      <h3 style="margin-bottom: var(--space-md); font-size: 1.1rem; color: var(--amber);">Area Analytics</h3>
-      <div id="analytics-content">
-        <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem; padding: var(--space-xl) 0;">
-          Loading analytics...
-        </div>
-      </div>
+      <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center;">(tap for full analytics)</div>
     </div>
   `;
 }
@@ -367,16 +351,14 @@ async function fetchCollapsedAnalytics(user) {
     const supplyText = document.getElementById('collapsed-supply-text');
     const trendText = document.getElementById('collapsed-supply-trend');
     
-    // Add live running duration if ON
-    const areaStatus = getUserAreaStatus();
-    let liveAdd = 0;
-    if (areaStatus && (areaStatus.currentStatus === 'ON' || areaStatus.currentStatus === 'LIKELY_ON')) {
-      liveAdd = (Date.now() - new Date(areaStatus.lastUpdated).getTime()) / (1000 * 60 * 60);
-    }
-    const todayTotal = data.today_supply_hours + liveAdd;
+    const todayTotal = data.today_supply_hours;
 
     if (supplyText) {
-      supplyText.textContent = `Today: ${todayTotal.toFixed(1)}h supply`;
+      if (todayTotal < 1) {
+        supplyText.textContent = `Today: ${Math.round(todayTotal * 60)} mins supply`;
+      } else {
+        supplyText.textContent = `Today: ${todayTotal.toFixed(1)}h supply`;
+      }
       if (trendText) {
         const diff = todayTotal - data.yesterday_supply_hours;
         trendText.textContent = diff >= 0 ? `↑ +${diff.toFixed(1)}h vs yday` : `↓ ${Math.abs(diff).toFixed(1)}h vs yday`;
@@ -388,114 +370,3 @@ async function fetchCollapsedAnalytics(user) {
   }
 }
 
-/**
- * Fetch and render the heavy expanded analytics panel.
- */
-async function fetchExpandedAnalytics(user) {
-  if (!user || !user.areaId) return;
-  
-  const content = document.getElementById('analytics-content');
-  if (!content) return;
-
-  try {
-    const data = await getExpandedAnalytics(user.areaId);
-    if (!data || !data.daily_stats || data.daily_stats.length === 0) {
-      content.innerHTML = `
-        <div style="text-align: center; color: var(--text-muted); font-size: 0.9rem;">
-          Not enough data yet for your area — keep reporting and analytics will appear here 📊
-        </div>
-      `;
-      return;
-    }
-    
-    const panel = document.getElementById('expanded-analytics-panel');
-    if (panel) panel.dataset.loaded = 'true';
-
-    // Parse the JSON array
-    const dailyStats = typeof data.daily_stats === 'string' ? JSON.parse(data.daily_stats) : data.daily_stats;
-    const todayStat = dailyStats[0] || {};
-    
-    // Build 7-day chart bars
-    const maxHours = 24;
-    let chartHtml = '<div style="display: flex; align-items: flex-end; justify-content: space-between; height: 100px; margin-bottom: var(--space-md); padding-bottom: var(--space-sm); border-bottom: 1px solid var(--border);">';
-    
-    // Reverse to show oldest to newest
-    const reversedDaily = [...dailyStats].reverse();
-    reversedDaily.forEach(d => {
-      const heightPct = ((d.on_hours || 0) / maxHours) * 100;
-      const color = d.on_hours >= 12 ? 'var(--green)' : 'var(--amber)';
-      const dayLabel = new Date(d.report_date).toLocaleDateString('en-US', { weekday: 'short' });
-      
-      chartHtml += `
-        <div style="display: flex; flex-direction: column; align-items: center; gap: 4px; flex: 1;">
-          <div style="width: 100%; display: flex; justify-content: center; height: 80px; align-items: flex-end;">
-            <div style="width: 16px; background-color: ${color}; height: ${Math.max(2, heightPct)}%; border-radius: 4px 4px 0 0;"></div>
-          </div>
-          <div style="font-size: 0.6rem; color: var(--text-muted);">${dayLabel}</div>
-        </div>
-      `;
-    });
-    chartHtml += '</div>';
-
-    // Fragmentation logic
-    const interruptions = todayStat.interruptions || 0;
-    let fragScore = 'Stable';
-    if (interruptions >= 4) fragScore = 'Highly Fragmented';
-    else if (interruptions >= 2) fragScore = 'Moderate';
-    else if (interruptions === 0 && todayStat.on_hours === 0) fragScore = 'No Supply';
-
-    let currentSessionStr = 'Unknown';
-    if (data.current_session) {
-      if (data.current_session.status === 'ON' || data.current_session.status === 'LIKELY_ON') {
-        currentSessionStr = `Power has been on for ${data.current_session.duration_hours.toFixed(1)}h`;
-      } else {
-        currentSessionStr = `Power has been out for ${data.current_session.duration_hours.toFixed(1)}h`;
-      }
-    }
-    
-    let longestStreakStr = 'N/A';
-    if (data.longest_streak && data.longest_streak.duration_hours) {
-       longestStreakStr = `${data.longest_streak.duration_hours.toFixed(1)} hours (on ${new Date(data.longest_streak.streak_date).toLocaleDateString()})`;
-    }
-
-    content.innerHTML = `
-      ${chartHtml}
-      
-      <div style="display: grid; grid-template-columns: 1fr; gap: var(--space-md); margin-top: var(--space-lg);">
-        
-        <div style="background: var(--bg-surface); padding: var(--space-md); border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Current Session</div>
-          <div style="font-size: 1.1rem; font-weight: 600;">${currentSessionStr}</div>
-        </div>
-
-        <div style="background: var(--bg-surface); padding: var(--space-md); border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Fragmentation Score</div>
-          <div style="font-size: 1.1rem; font-weight: 600;">${fragScore}</div>
-          <div style="font-size: 0.8rem; color: var(--text-muted); margin-top: 4px;">Fragmented means power came in short bursts.</div>
-        </div>
-        
-        <div style="background: var(--bg-surface); padding: var(--space-md); border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Longest Streak This Month</div>
-          <div style="font-size: 1.1rem; font-weight: 600;">${longestStreakStr}</div>
-        </div>
-
-        <div style="background: var(--bg-surface); padding: var(--space-md); border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Outage Frequency</div>
-          <div style="font-size: 1.1rem; font-weight: 600;">${interruptions} outages today</div>
-        </div>
-        
-        ${data.flash_count > 0 ? `
-        <div style="background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.2); padding: var(--space-md); border-radius: var(--radius-md);">
-          <div style="font-size: 0.75rem; color: var(--amber); margin-bottom: 4px; text-transform: uppercase; font-weight: bold;">⚠️ Flash Supplies Detected</div>
-          <div style="font-size: 1.1rem; font-weight: 600; color: var(--amber);">${data.flash_count} short bursts this week</div>
-          <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">These short bursts can damage appliances — unplug sensitive electronics during unstable periods.</div>
-        </div>
-        ` : ''}
-        
-      </div>
-    `;
-  } catch (err) {
-    console.error('Error fetching expanded analytics:', err);
-    content.innerHTML = '<div style="color: var(--amber);">Failed to load analytics</div>';
-  }
-}
