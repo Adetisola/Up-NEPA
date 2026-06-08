@@ -354,3 +354,17 @@ export function subscribeToNotifications(userId, callback) {
     supabase.removeChannel(subscription);
   };
 }
+
+/**
+ * Fetch a user's streak history (last 7 days).
+ */
+export async function getUserStreakHistory(userId) {
+  if (!supabase || !userId) return [];
+  const { data, error } = await supabase.rpc('get_user_streak_history', { p_user_id: userId });
+  
+  if (error) {
+    console.error('[Up NEPA] getUserStreakHistory error:', error);
+    return [];
+  }
+  return data || [];
+}

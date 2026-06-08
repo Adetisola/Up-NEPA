@@ -19,9 +19,9 @@ import {
 import { getAreaPatterns, getTodaySupplySummary, getExpandedAnalytics } from './data/supabase.js';
 import { renderStatusCard } from './components/status-card.js';
 import { renderNearbyAreas } from './components/nearby-area.js';
-import { renderStreakBanner } from './components/streak-banner.js';
 import { renderNotificationDrawer, bindNotificationDrawer } from './components/notification-drawer.js';
 import { bindReportButtons } from './reporting.js';
+import { renderStreakPopover } from './components/streak-popover.js';
 
 import { deferredPrompt, triggerAppInstall } from '../main.js';
 
@@ -48,15 +48,14 @@ export function renderHome(container) {
     const unreadCount = getUnreadCount();
 
     container.innerHTML = `
-      ${renderHeader(unreadCount)}
+      ${renderHeader(unreadCount, streak)}
       <main class="home" role="main">
         <div id="install-banner-container">${renderInstallBanner()}</div>
         <div id="status-card-container">${renderStatusCard(areaStatus, area)}</div>
         <div id="report-buttons-container">${renderReportButtons(areaStatus)}</div>
-        <div id="nearby-areas-container">${renderNearbyAreas(nearbyStatuses)}</div>
         <div id="collapsed-analytics-container">${renderCollapsedAnalytics()}</div>
+        <div id="nearby-areas-container">${renderNearbyAreas(nearbyStatuses)}</div>
         <div id="prediction-container">${renderPrediction(areaStatus)}</div>
-        <div id="streak-banner-container">${renderStreakBanner(streak)}</div>
       </main>
       <div id="drawer-container">${renderNotificationDrawer(notifications)}</div>
     `;
@@ -141,8 +140,10 @@ export function renderHome(container) {
     const predictionContainer = document.getElementById('prediction-container');
     if (predictionContainer) predictionContainer.innerHTML = renderPrediction(areaStatus);
     
-    const streakContainer = document.getElementById('streak-banner-container');
-    if (streakContainer) streakContainer.innerHTML = renderStreakBanner(streak);
+    const headerStreakCount = document.getElementById('header-streak-count');
+    if (headerStreakCount) {
+      headerStreakCount.textContent = streak;
+    }
     
     const drawerContainer = document.getElementById('drawer-container');
     if (drawerContainer) {
@@ -220,8 +221,14 @@ function renderInstallBanner() {
 /**
  * Render the app header.
  */
-function renderHeader(unreadCount = 0) {
+function renderHeader(unreadCount = 0, streak = 0) {
   const badgeHtml = unreadCount > 0 ? `<div class="notif-badge"></div>` : '';
+
+  const streakHtml = streak > 0 ? `
+    <button class="header-btn" id="btn-streak" aria-label="Streak" title="Streak" style="display: flex; align-items: center; gap: 4px; color: var(--amber); background: rgba(245, 158, 11, 0.1); border-radius: 12px; padding: 4px 8px; margin-right: 4px; border: 1px solid rgba(245, 158, 11, 0.2);">
+      <span>🔥</span><span id="header-streak-count" style="font-weight: 700; font-size: 0.9rem;">${streak}</span>
+    </button>
+  ` : '';
 
   return `
     <header class="header" role="banner">
@@ -233,6 +240,7 @@ function renderHeader(unreadCount = 0) {
         <div class="live-indicator" id="live-indicator-dot" style="display: none;"></div>
       </div>
       <div class="header-actions">
+        ${streakHtml}
         <button class="header-btn" id="btn-notif" aria-label="Notifications" title="Notifications">
           ${badgeHtml}
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -316,6 +324,14 @@ function bindHeaderEvents() {
   if (btnSettings) {
     btnSettings.addEventListener('click', () => {
       window.location.hash = '/settings';
+    });
+  }
+  
+  const btnStreak = document.getElementById('btn-streak');
+  if (btnStreak) {
+    btnStreak.addEventListener('click', (e) => {
+      e.stopPropagation();
+      renderStreakPopover();
     });
   }
 }
