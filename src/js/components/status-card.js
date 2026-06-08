@@ -17,7 +17,6 @@ export function renderStatusCard(areaStatus, area) {
     return `
       <div class="status-hero status-unknown" id="status-card">
         <div class="status-icon-row">
-          <span class="status-bolt">—</span>
           <div>
             <div class="status-label">No Area Selected</div>
           </div>
@@ -41,7 +40,7 @@ export function renderStatusCard(areaStatus, area) {
   if (staleness === 'none') heroClass = 'status-unknown';
 
   // Status icon
-  let bolt = '—';
+  let bolt = '';
   const s = areaStatus.currentStatus;
   if (s === 'ON' || s === 'LIKELY_ON') bolt = '⚡';
   else if (s === 'OFF' || s === 'LIKELY_OFF') bolt = '🔴';
@@ -71,7 +70,7 @@ export function renderStatusCard(areaStatus, area) {
       </div>
 
       <div class="status-icon-row" style="margin-top: var(--space-xl)">
-        <span class="status-bolt">${bolt}</span>
+        ${bolt ? `<span class="status-bolt">${bolt}</span>` : ''}
         <div>
           <div class="status-label">${staleness === 'none' ? 'No Recent Data' : statusLabel}</div>
         </div>
