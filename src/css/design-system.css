@@ -262,6 +262,11 @@ img, svg { display: block; max-width: 100%; }
   to { opacity: 1; }
 }
 
+@keyframes slide-down {
+  from { opacity: 0; transform: translateY(-10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
 /* ── App Container ──────────────────────────────────── */
 #app {
   max-width: 480px;
@@ -407,11 +412,13 @@ img, svg { display: block; max-width: 100%; }
 
 /* ── Cards ──────────────────────────────────────────── */
 .card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
+  background: var(--bg-glass);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-xl);
   padding: var(--space-xl);
-  box-shadow: var(--shadow-sm);
+  box-shadow: var(--shadow-md);
   transition: all var(--duration-base) var(--ease-out);
 }
 

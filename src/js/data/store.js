@@ -457,6 +457,21 @@ export function getNotifications() {
   return state.notifications;
 }
 
+/**
+ * Format hours into a human-readable string (e.g., "2h 12m")
+ * @param {number} hours 
+ * @returns {string} Formatted duration
+ */
+export function formatDuration(hours) {
+  if (!hours) return '0m';
+  const h = Math.floor(hours);
+  const m = Math.round((hours - h) * 60);
+  
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
 export async function clearUnreadNotifications() {
   if (state.unreadCount === 0) return;
   

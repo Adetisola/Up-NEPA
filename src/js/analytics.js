@@ -1,4 +1,4 @@
-import { getState, subscribe } from './data/store.js';
+import { getState, subscribe, formatDuration } from './data/store.js';
 import { getExpandedAnalytics, getTodaySupplySummary } from './data/supabase.js';
 
 export function renderAnalytics(container) {
@@ -39,18 +39,12 @@ function updateAnalytics(state) {
   // Synchronous UI updates based on local state if needed
 }
 
-function formatDuration(hours) {
-  if (hours < 1) {
-    const mins = Math.round(hours * 60);
-    return `${mins} mins`;
-  }
-  return `${hours.toFixed(1)}h`;
-}
-
 function formatTime(isoString) {
   const d = new Date(isoString);
   return d.toLocaleTimeString([], {hour: 'numeric', minute:'2-digit'}).toLowerCase();
 }
+
+let globalAnalyticsData = null;
 
 async function fetchRealAnalytics(state) {
   const user = state.user;
@@ -61,14 +55,10 @@ async function fetchRealAnalytics(state) {
     let todayHours = summary ? summary.today_supply_hours : 0;
     
     const data = await getExpandedAnalytics(user.areaId);
-
+    
     const supplyEl = document.getElementById('supply-hours');
     if (supplyEl) {
-      if (todayHours < 1) {
-        supplyEl.innerHTML = `${Math.round(todayHours * 60)}<span style="font-size: 1.2rem; margin-left: 4px;">mins</span>`;
-      } else {
-        supplyEl.innerHTML = `${todayHours.toFixed(1)}<span style="font-size: 1.2rem; margin-left: 4px;">h</span>`;
-      }
+      supplyEl.innerHTML = formatDuration(todayHours);
     }
     
     const content = document.getElementById('analytics-content');
@@ -94,58 +84,20 @@ async function fetchRealAnalytics(state) {
       return;
     }
 
-    // Prepare Daily Stats
-    const dailyStats = typeof data.daily_stats === 'string' ? JSON.parse(data.daily_stats) : (data.daily_stats || []);
-    let maxHours = Math.max(...dailyStats.map(d => d.on_hours || 0), 1);
-    if (maxHours < 2) maxHours = 2;
+    globalAnalyticsData = data;
 
-    const reversedDaily = [...dailyStats].reverse(); 
+    // Parse once
+    globalAnalyticsData.daily_stats_parsed = typeof data.daily_stats === 'string' ? JSON.parse(data.daily_stats) : (data.daily_stats || []);
+    globalAnalyticsData.monthly_stats_parsed = typeof data.monthly_stats === 'string' ? JSON.parse(data.monthly_stats) : (data.monthly_stats || []);
 
-    // Render full rich dashboard
-    let chartHtml = `
-      <div class="card" style="margin-bottom: 20px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
-          <h3 style="font-size: 1rem; margin: 0;">Past 7 Days</h3>
-          <span style="font-size: 0.7rem; color: var(--text-muted);">(Tap bar for log matrix)</span>
-        </div>
-        <div id="bar-chart-container" class="bar-chart" style="display: flex; align-items: flex-end; justify-content: space-between; height: 140px; padding-bottom: 10px; border-bottom: 1px solid var(--border);">
-    `;
-    
-    if (reversedDaily.length === 0) {
-       chartHtml += '<div style="width: 100%; text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-bottom: 20px;">No historical data available</div>';
-    } else {
-      reversedDaily.forEach((d, i) => {
-        const heightPct = ((d.on_hours || 0) / maxHours) * 100;
-        const color = (d.on_hours || 0) >= 12 ? 'var(--green)' : 'var(--amber)';
-        const dayLabel = new Date(d.report_date).toLocaleDateString('en-US', { weekday: 'short' });
-        
-        chartHtml += `
-          <div class="interactive-bar" data-index="${i}" style="display: flex; flex-direction: column; align-items: center; gap: 8px; flex: 1; height: 100%; cursor: pointer;">
-            <div style="width: 100%; display: flex; justify-content: center; height: 100px; align-items: flex-end;">
-              <div style="width: 16px; background-color: ${color}; height: ${Math.max(2, heightPct)}%; border-radius: 4px 4px 0 0; transition: transform 0.1s, opacity 0.2s; animation: grow-up 0.6s ease-out backwards; animation-delay: ${i * 0.05}s;" class="bar-fill"></div>
-            </div>
-            <div style="font-size: 0.6rem; color: var(--text-muted); font-weight: 600;" class="bar-label">${dayLabel}</div>
-          </div>
-        `;
-      });
-    }
-    chartHtml += `
-        </div>
-        <div id="matrix-container" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px dashed var(--border); font-size: 0.85rem;">
-        </div>
-      </div>
-    `;
-
-    // 1. Calculate Grid Reliability metrics
+    // 1. Calculate Grid Reliability metrics from full 30 days
+    const dailyStats = globalAnalyticsData.daily_stats_parsed;
     const daysTracked = Math.max(dailyStats.length, 1);
     let totalOnHours = 0;
     dailyStats.forEach(d => totalOnHours += (d.on_hours || 0));
     const availabilityPct = (totalOnHours / (daysTracked * 24)) * 100;
     
-    let rating = 'E';
-    let ratingColor = '#ef4444'; // red
-    let verdictText = 'Critically Deficient';
-    
+    let rating = 'E'; let ratingColor = '#ef4444'; let verdictText = 'Critically Deficient';
     if (availabilityPct >= 90) { rating = 'A'; ratingColor = '#22c55e'; verdictText = 'Highly Reliable'; }
     else if (availabilityPct >= 70) { rating = 'B'; ratingColor = '#22c55e'; verdictText = 'Stable'; }
     else if (availabilityPct >= 50) { rating = 'C'; ratingColor = '#eab308'; verdictText = 'Moderately Deficient'; }
@@ -171,10 +123,9 @@ async function fetchRealAnalytics(state) {
     }
 
     content.innerHTML = `
-      ${chartHtml}
+      <div id="chart-wrapper"></div>
       
       <div style="display: grid; grid-template-columns: 1fr; gap: var(--space-md); margin-top: var(--space-lg);">
-        
         <div style="background: var(--bg-surface); padding: var(--space-md); border-radius: var(--radius-md);">
           <div style="font-size: 0.75rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase;">Current Session</div>
           <div style="font-size: 1.1rem; font-weight: 600;">${currentSessionStr}</div>
@@ -206,74 +157,209 @@ async function fetchRealAnalytics(state) {
           <div style="font-size: 0.8rem; color: var(--text-secondary); margin-top: 4px;">These short bursts can damage appliances — unplug sensitive electronics during unstable periods.</div>
         </div>
         ` : ''}
-        
       </div>
     `;
 
-    // Add interactivity to the chart bars
-    const chartContainer = document.getElementById('bar-chart-container');
-    const matrixContainer = document.getElementById('matrix-container');
-    
-    if (chartContainer && matrixContainer) {
-      const bars = chartContainer.querySelectorAll('.interactive-bar');
-      bars.forEach(bar => {
-        bar.addEventListener('click', () => {
-          // Reset styles
-          bars.forEach(b => {
-             b.querySelector('.bar-fill').style.opacity = '0.5';
-             b.querySelector('.bar-label').style.color = 'var(--text-muted)';
-          });
-          // Highlight active
-          bar.querySelector('.bar-fill').style.opacity = '1';
-          bar.querySelector('.bar-label').style.color = 'var(--text-main)';
-          
-          const idx = parseInt(bar.getAttribute('data-index'));
-          const dayData = reversedDaily[idx];
-          
-          if (!dayData) return;
-          
-          const dateStr = new Date(dayData.report_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-          
-          let intervalsHtml = '<div style="color: var(--text-muted); font-style: italic;">Aggregated data only. Update backend to see granular spans.</div>';
-          
-          if (dayData.intervals && dayData.intervals.length > 0) {
-            const onSpans = dayData.intervals.filter(iv => iv.status === 'ON' || iv.status === 'LIKELY_ON');
-            if (onSpans.length > 0) {
-              intervalsHtml = onSpans.map(iv => {
-                const start = formatTime(iv.start_time);
-                const endD = new Date(new Date(iv.start_time).getTime() + ((iv.duration_hours || 0) * 3600 * 1000));
-                const end = formatTime(endD.toISOString());
-                return `<div style="background: var(--bg-body); padding: 6px 10px; border-radius: 4px; display: inline-block; margin: 4px; border: 1px solid var(--border);">
-                          <span style="color: var(--primary); font-weight: 600;">${start} → ${end}</span> 
-                          <span style="color: var(--text-muted); margin-left: 6px;">(${formatDuration(iv.duration_hours || 0)})</span>
-                        </div>`;
-              }).join('');
-            } else {
-              intervalsHtml = '<div style="color: var(--red); font-weight: 600; padding: 4px;">Total Blackout</div>';
-            }
-          }
-
-          matrixContainer.style.display = 'block';
-          matrixContainer.innerHTML = `
-            <div style="font-weight: 700; margin-bottom: 8px; display: flex; justify-content: space-between;">
-              <span>${dateStr} Log</span>
-              <span>${dayData.interruptions || 0} Interruptions</span>
-            </div>
-            <div style="margin-bottom: 10px;">Total Supply: <strong>${formatDuration(dayData.on_hours || 0)}</strong></div>
-            <div>${intervalsHtml}</div>
-          `;
-        });
-      });
-      
-      // Auto-click the last bar (today) if it exists
-      if (bars.length > 0) {
-         bars[bars.length - 1].click();
-      }
-    }
+    renderChartSection('7D');
 
   } catch (err) {
     console.error('Error fetching expanded analytics:', err);
     const content = document.getElementById('analytics-content');
     if (content) content.innerHTML = '<div style="color: var(--amber); text-align: center;">Failed to load analytics</div>';
+  }
+}
+
+function renderChartSection(span) {
+  const chartWrapper = document.getElementById('chart-wrapper');
+  if (!chartWrapper || !globalAnalyticsData) return;
+
+  const allDaily = globalAnalyticsData.daily_stats_parsed;
+  const allMonthly = globalAnalyticsData.monthly_stats_parsed;
+
+  let dataset = [];
+  let formatLabel = (d) => new Date(d.report_date).toLocaleDateString('en-US', { weekday: 'short' });
+  let hasMatrix = false;
+  
+  if (span === '7D') {
+    dataset = [...allDaily].slice(0, 7).reverse();
+    hasMatrix = true;
+  } else if (span === '30D') {
+    dataset = [...allDaily].slice(0, 30).reverse();
+    formatLabel = (d) => new Date(d.report_date).getDate();
+    hasMatrix = true;
+  } else if (span === '1Y') {
+    dataset = [...allMonthly];
+    formatLabel = (d) => new Date(d.report_month).toLocaleDateString('en-US', { month: 'short' });
+    hasMatrix = false;
+  }
+
+  // Calculate average
+  let totalHours = 0;
+  let totalDaysInDataset = 0;
+  
+  if (span === '1Y') {
+    dataset.forEach(m => {
+      totalHours += (m.on_hours || 0);
+      // Rough approximation for monthly avg: 30 days per month
+      totalDaysInDataset += 30;
+    });
+  } else {
+    dataset.forEach(d => totalHours += (d.on_hours || 0));
+    totalDaysInDataset = Math.max(dataset.length, 1);
+  }
+  
+  const avgDailyHours = totalDaysInDataset > 0 ? (totalHours / totalDaysInDataset) : 0;
+  
+  const maxAxisValue = 24; // Y-axis max is always 24h to keep scale consistent
+  
+  let chartHtml = `
+    <div class="card" style="margin-bottom: 20px; padding: 16px;">
+      <!-- Header & Toggle -->
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+        <div>
+          <h3 style="font-size: 1rem; margin: 0; margin-bottom: 4px;">Supply Log</h3>
+          <div style="font-size: 0.8rem; color: var(--text-muted);">Avg: <strong style="color:var(--text-main);">${formatDuration(avgDailyHours)} / day</strong></div>
+        </div>
+        
+        <div style="background: var(--bg-surface); padding: 4px; border-radius: 20px; display: flex; gap: 2px;">
+          <button class="span-toggle ${span === '7D' ? 'active' : ''}" data-span="7D" style="border:none; background:${span === '7D' ? 'var(--primary-fade)' : 'transparent'}; color:${span === '7D' ? 'var(--primary)' : 'var(--text-muted)'}; padding: 4px 12px; border-radius: 16px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">7D</button>
+          <button class="span-toggle ${span === '30D' ? 'active' : ''}" data-span="30D" style="border:none; background:${span === '30D' ? 'var(--primary-fade)' : 'transparent'}; color:${span === '30D' ? 'var(--primary)' : 'var(--text-muted)'}; padding: 4px 12px; border-radius: 16px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">30D</button>
+          <button class="span-toggle ${span === '1Y' ? 'active' : ''}" data-span="1Y" style="border:none; background:${span === '1Y' ? 'var(--primary-fade)' : 'transparent'}; color:${span === '1Y' ? 'var(--primary)' : 'var(--text-muted)'}; padding: 4px 12px; border-radius: 16px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">1Y</button>
+        </div>
+      </div>
+      
+      <!-- Chart Area -->
+      <div style="position: relative; height: 160px; margin-bottom: 10px; padding-left: 28px;">
+        
+        <!-- Y-Axis Grid -->
+        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 20px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none;">
+          <div style="border-top: 1px dashed var(--border-light); position: relative;">
+             <span style="position: absolute; left: 0; top: -8px; font-size: 0.6rem; color: var(--text-muted);">24h</span>
+          </div>
+          <div style="border-top: 1px dashed var(--border-light); position: relative;">
+             <span style="position: absolute; left: 0; top: -8px; font-size: 0.6rem; color: var(--text-muted);">12h</span>
+          </div>
+          <div style="border-top: 1px dashed var(--border-light); position: relative;">
+             <span style="position: absolute; left: 0; top: -8px; font-size: 0.6rem; color: var(--text-muted);">0h</span>
+          </div>
+        </div>
+
+        <!-- Scrollable Bars -->
+        <div id="bar-chart-container" style="display: flex; align-items: flex-end; justify-content: space-between; height: 100%; position: relative; z-index: 1; overflow-x: auto; scrollbar-width: none; padding-left: 10px; gap: ${span === '30D' ? '4px' : '0'};">
+  `;
+  
+  if (dataset.length === 0) {
+     chartHtml += '<div style="width: 100%; text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 60px;">No historical data available</div>';
+  } else {
+    dataset.forEach((d, i) => {
+      // For 1Y, d.on_hours is total for the month, so avg daily is total / 30.
+      let val = d.on_hours || 0;
+      if (span === '1Y') val = val / 30; // rough avg
+      
+      const heightPct = Math.min((val / maxAxisValue) * 100, 100);
+      const color = val >= 12 ? 'var(--green)' : 'var(--amber)';
+      const label = formatLabel(d);
+      const isInteractive = hasMatrix ? 'cursor: pointer;' : '';
+      
+      // Determine bar width
+      let barWidth = '16px';
+      if (span === '30D') barWidth = '8px';
+      if (span === '1Y') barWidth = '12px';
+      
+      chartHtml += `
+        <div class="interactive-bar" data-index="${i}" style="display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: ${span === '30D' ? '0 0 auto' : '1'}; min-width: ${span === '30D' ? '20px' : 'auto'}; height: 100%; ${isInteractive}">
+          <div style="width: 100%; display: flex; justify-content: center; height: calc(100% - 20px); align-items: flex-end;">
+            <div style="width: ${barWidth}; background-color: ${color}; height: ${Math.max(2, heightPct)}%; border-radius: 4px 4px 0 0; transition: transform 0.1s, opacity 0.2s; animation: grow-up 0.6s ease-out backwards; animation-delay: ${i * 0.02}s;" class="bar-fill"></div>
+          </div>
+          <div style="font-size: ${span === '30D' ? '0.55rem' : '0.6rem'}; color: var(--text-muted); font-weight: 600; height: 20px; display: flex; align-items: center; white-space: nowrap;" class="bar-label">${label}</div>
+        </div>
+      `;
+    });
+  }
+  
+  chartHtml += `
+        </div>
+      </div>
+      
+      ${hasMatrix ? `<div style="text-align: right; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 5px;">(Tap bar for log matrix)</div>` : ''}
+      <div id="matrix-container" style="display: none; margin-top: 5px; padding-top: 15px; border-top: 1px dashed var(--border); font-size: 0.85rem;"></div>
+    </div>
+  `;
+
+  chartWrapper.innerHTML = chartHtml;
+
+  // Bind toggles
+  const toggles = chartWrapper.querySelectorAll('.span-toggle');
+  toggles.forEach(t => {
+    t.addEventListener('click', (e) => {
+      const newSpan = e.target.getAttribute('data-span');
+      if (newSpan !== span) {
+        renderChartSection(newSpan);
+      }
+    });
+  });
+
+  // Bind bars for Matrix
+  if (hasMatrix) {
+    const bars = chartWrapper.querySelectorAll('.interactive-bar');
+    const matrixContainer = document.getElementById('matrix-container');
+    
+    bars.forEach(bar => {
+      bar.addEventListener('click', () => {
+        bars.forEach(b => {
+           b.querySelector('.bar-fill').style.opacity = '0.5';
+           b.querySelector('.bar-label').style.color = 'var(--text-muted)';
+        });
+        bar.querySelector('.bar-fill').style.opacity = '1';
+        bar.querySelector('.bar-label').style.color = 'var(--text-main)';
+        
+        const idx = parseInt(bar.getAttribute('data-index'));
+        const dayData = dataset[idx];
+        if (!dayData) return;
+        
+        const dateStr = new Date(dayData.report_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        let intervalsHtml = '<div style="color: var(--text-muted); font-style: italic;">Aggregated data only. Update backend to see granular spans.</div>';
+        
+        if (dayData.intervals && dayData.intervals.length > 0) {
+          const onSpans = dayData.intervals.filter(iv => iv.status === 'ON' || iv.status === 'LIKELY_ON');
+          if (onSpans.length > 0) {
+            intervalsHtml = onSpans.map(iv => {
+              const start = formatTime(iv.start_time);
+              const endD = new Date(new Date(iv.start_time).getTime() + ((iv.duration_hours || 0) * 3600 * 1000));
+              const end = formatTime(endD.toISOString());
+              return `<div style="background: var(--bg-body); padding: 6px 10px; border-radius: 4px; display: inline-block; margin: 4px; border: 1px solid var(--border);">
+                        <span style="color: var(--primary); font-weight: 600;">${start} → ${end}</span> 
+                        <span style="color: var(--text-muted); margin-left: 6px;">(${formatDuration(iv.duration_hours || 0)})</span>
+                      </div>`;
+            }).join('');
+          } else {
+            intervalsHtml = '<div style="color: var(--red); font-weight: 600; padding: 4px;">Total Blackout</div>';
+          }
+        }
+
+        matrixContainer.style.display = 'block';
+        matrixContainer.style.animation = 'none';
+        void matrixContainer.offsetWidth; // trigger reflow
+        matrixContainer.style.animation = 'slide-down 0.3s ease-out';
+        matrixContainer.innerHTML = `
+          <div style="font-weight: 700; margin-bottom: 8px; display: flex; justify-content: space-between;">
+            <span>${dateStr} Log</span>
+            <span>${dayData.interruptions || 0} Interruptions</span>
+          </div>
+          <div style="margin-bottom: 10px;">Total Supply: <strong>${formatDuration(dayData.on_hours || 0)}</strong></div>
+          <div>${intervalsHtml}</div>
+        `;
+      });
+    });
+    
+    // Auto-click the last bar
+    if (bars.length > 0) {
+       bars[bars.length - 1].click();
+       // scroll to end if 30D
+       if (span === '30D') {
+         const container = document.getElementById('bar-chart-container');
+         container.scrollLeft = container.scrollWidth;
+       }
+    }
   }
 }

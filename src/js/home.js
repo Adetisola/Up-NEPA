@@ -14,6 +14,7 @@ import {
   formatTimeAgo,
   getNotifications,
   getUnreadCount,
+  formatDuration,
 } from './data/store.js';
 import { getAreaPatterns, getTodaySupplySummary, getExpandedAnalytics } from './data/supabase.js';
 import { renderStatusCard } from './components/status-card.js';
@@ -354,14 +355,10 @@ async function fetchCollapsedAnalytics(user) {
     const todayTotal = data.today_supply_hours;
 
     if (supplyText) {
-      if (todayTotal < 1) {
-        supplyText.textContent = `Today: ${Math.round(todayTotal * 60)} mins supply`;
-      } else {
-        supplyText.textContent = `Today: ${todayTotal.toFixed(1)}h supply`;
-      }
+      supplyText.textContent = `Today: ${formatDuration(todayTotal)} supply`;
       if (trendText) {
         const diff = todayTotal - data.yesterday_supply_hours;
-        trendText.textContent = diff >= 0 ? `↑ +${diff.toFixed(1)}h vs yday` : `↓ ${Math.abs(diff).toFixed(1)}h vs yday`;
+        trendText.textContent = diff >= 0 ? `↑ +${formatDuration(diff)} vs yday` : `↓ ${formatDuration(Math.abs(diff))} vs yday`;
         trendText.style.color = diff >= 0 ? 'var(--green)' : 'var(--amber)';
       }
     }
