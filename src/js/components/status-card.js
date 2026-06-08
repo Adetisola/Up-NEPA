@@ -41,7 +41,11 @@ export function renderStatusCard(areaStatus, area) {
   if (staleness === 'none') heroClass = 'status-unknown';
 
   // Status icon
-  const bolt = statusType === 'on' ? '⚡' : statusType === 'off' ? '🔴' : '—';
+  let bolt = '—';
+  const s = areaStatus.currentStatus;
+  if (s === 'ON' || s === 'LIKELY_ON') bolt = '⚡';
+  else if (s === 'OFF' || s === 'LIKELY_OFF') bolt = '🔴';
+  else if (s === 'UNSTABLE') bolt = '⚠️';
 
   // Meta label based on staleness
   let stalenessLabel = '';

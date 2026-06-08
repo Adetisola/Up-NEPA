@@ -100,11 +100,11 @@ export function calculateAreaStatus(reports) {
  */
 export function getStatusLabel(status) {
   switch (status) {
-    case 'ON': return 'LIGHT IS UP';
-    case 'OFF': return 'LIGHT IS OUT';
-    case 'LIKELY_ON': return 'POSSIBLE — UNCONFIRMED';
-    case 'LIKELY_OFF': return 'PROBABLY OUT';
-    case 'UNSTABLE': return 'UNSTABLE / FLICKERING';
+    case 'ON': return 'LIGHT IS ON';
+    case 'OFF': return 'LIGHT IS OFF';
+    case 'LIKELY_ON': return 'LIKELY ON';
+    case 'LIKELY_OFF': return 'LIKELY OFF';
+    case 'UNSTABLE': return 'UNSTABLE';
     case 'UNCONFIRMED':
     default: return 'UNCONFIRMED';
   }

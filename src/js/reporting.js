@@ -88,17 +88,19 @@ export function bindReportButtons() {
   const btnOn = document.getElementById('btn-report-on');
   const btnOff = document.getElementById('btn-report-off');
 
-  if (btnOn) {
+  if (btnOn && !btnOn.dataset.bound) {
     btnOn.addEventListener('click', (e) => {
       e.preventDefault();
       submitReport('ON');
     });
+    btnOn.dataset.bound = 'true';
   }
 
-  if (btnOff) {
+  if (btnOff && !btnOff.dataset.bound) {
     btnOff.addEventListener('click', (e) => {
       e.preventDefault();
       submitReport('OFF');
     });
+    btnOff.dataset.bound = 'true';
   }
 }

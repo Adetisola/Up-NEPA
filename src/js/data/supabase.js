@@ -168,22 +168,31 @@ export async function getAreaPatterns(areaId) {
 }
 
 /**
- * Fetch daily analytics for an area.
+ * Fetch fast summary for the collapsed analytics bar.
  */
-export async function getDailyAnalytics(areaId) {
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from('daily_analytics')
-    .select('*')
-    .eq('area_id', areaId)
-    .order('date', { ascending: false })
-    .limit(7);
+export async function getTodaySupplySummary(areaId) {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc('get_today_supply_summary', { p_area_id: areaId });
   
   if (error) {
-    console.error('[Up NEPA] getDailyAnalytics error:', error);
-    return [];
+    console.error('[Up NEPA] getTodaySupplySummary error:', error);
+    return null;
   }
-  return data || [];
+  return data;
+}
+
+/**
+ * Fetch heavy analytics for the expanded dashboard.
+ */
+export async function getExpandedAnalytics(areaId) {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc('get_expanded_analytics', { p_area_id: areaId });
+  
+  if (error) {
+    console.error('[Up NEPA] getExpandedAnalytics error:', error);
+    return null;
+  }
+  return data;
 }
 
 /**

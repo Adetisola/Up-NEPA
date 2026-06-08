@@ -12,11 +12,13 @@ When the user invokes this workflow, execute the following SQL script against th
 If you have access to the Supabase MCP server (`execute_sql`), run this directly. If not, guide the user to paste this exact snippet into their Supabase Dashboard SQL Editor.
 
 ```sql
--- 1. Wipe out all test reports, notifications, users, and patterns
+-- 1. Wipe out all test reports, notifications, users, patterns, and analytics
 TRUNCATE TABLE notifications CASCADE;
 TRUNCATE TABLE reports CASCADE;
 TRUNCATE TABLE users CASCADE;
 TRUNCATE TABLE patterns CASCADE;
+TRUNCATE TABLE daily_analytics CASCADE;
+TRUNCATE TABLE flash_events CASCADE;
 
 -- 2. Reset the area statuses to their default state
 UPDATE area_status 
