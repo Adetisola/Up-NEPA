@@ -1,5 +1,5 @@
-import { getState, subscribe, formatDuration } from './data/store.js';
-import { getExpandedAnalytics, getTodaySupplySummary } from './data/supabase.js';
+
+
 
 export function renderAnalytics(container) {
   const state = getState();
@@ -286,11 +286,11 @@ function renderChartSection(span) {
     const labelBg = d.isToday ? 'background-color: var(--border-light); border-radius: 12px; padding: 2px 6px; display: flex; align-items: center; justify-content: center; color: var(--text-main);' : 'padding: 2px 6px; display: flex; align-items: center; justify-content: center;';
     
     chartHtml += `
-      <div class="interactive-bar" data-index="${i}" style="position: relative; z-index: 2; display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: ${span === '30D' ? '0 0 auto' : '1'}; min-width: ${span === '30D' ? '12px' : 'auto'}; height: 100%; ${isInteractive}">
-        <div style="width: 100%; display: flex; justify-content: center; height: calc(100% - 24px); align-items: flex-end; pointer-events: none;">
+      <div class="interactive-bar" data-index="${i}" style="display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: ${span === '30D' ? '0 0 auto' : '1'}; min-width: ${span === '30D' ? '12px' : 'auto'}; height: 100%; ${isInteractive}">
+        <div style="width: 100%; display: flex; justify-content: center; height: calc(100% - 24px); align-items: flex-end;">
           ${d.on_hours > 0 ? `<div style="width: ${barWidth}; background-color: ${color}; height: ${Math.max(2, heightPct)}%; border-radius: 4px 4px 0 0; transition: transform 0.1s, opacity 0.2s; animation: grow-up 0.6s ease-out backwards; animation-delay: ${i * 0.02}s;" class="bar-fill"></div>` : ''}
         </div>
-        <div class="bar-label" style="font-size: ${span === '30D' ? '0.55rem' : '0.65rem'}; color: ${d.isToday ? 'var(--text-main)' : 'var(--text-muted)'}; font-weight: ${d.isToday ? '700' : '600'}; margin-top: 4px; pointer-events: none;">
+        <div class="bar-label" style="font-size: ${span === '30D' ? '0.55rem' : '0.65rem'}; color: ${d.isToday ? 'var(--text-main)' : 'var(--text-muted)'}; font-weight: ${d.isToday ? '700' : '600'}; margin-top: 4px;">
           <div style="${labelBg}">${d.label}</div>
         </div>
       </div>
@@ -325,67 +325,57 @@ function renderChartSection(span) {
     const matrixContainer = document.getElementById('matrix-container');
     
     bars.forEach(bar => {
-      // Use both click and touchstart for better mobile responsiveness
-      const handleInteraction = (e) => {
-        try {
-          bars.forEach(b => {
-             const fill = b.querySelector('.bar-fill');
-             if (fill) fill.style.opacity = '0.5';
-             const label = b.querySelector('.bar-label');
-             if (label) label.style.color = 'var(--text-muted)';
-          });
-          
-          const activeFill = bar.querySelector('.bar-fill');
-          if (activeFill) activeFill.style.opacity = '1';
-          const activeLabel = bar.querySelector('.bar-label');
-          if (activeLabel) activeLabel.style.color = 'var(--text-main)';
-          
-          const idx = parseInt(bar.getAttribute('data-index'));
-          const fixedItem = fixedData[idx];
-          if (!fixedItem) return;
-          
-          const dateStr = fixedItem.dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
-          const dayData = fixedItem.original || {};
-          
-          let intervalsHtml = '<div style="color: var(--text-muted); font-style: italic;">Aggregated data only. Update backend to see granular spans.</div>';
-          
-          if (dayData.intervals && dayData.intervals.length > 0) {
-            const onSpans = dayData.intervals.filter(iv => iv.status === 'ON' || iv.status === 'LIKELY_ON');
-            if (onSpans.length > 0) {
-              intervalsHtml = onSpans.map(iv => {
-                const start = formatTime(iv.start_time);
-                const endD = new Date(new Date(iv.start_time).getTime() + ((iv.duration_hours || 0) * 3600 * 1000));
-                const end = formatTime(endD.toISOString());
-                return `<div style="background: var(--bg-surface); padding: 6px 10px; border-radius: 4px; display: inline-block; margin: 4px; border: 1px solid var(--border);">
-                          <span style="color: var(--primary); font-weight: 600;">${start} → ${end}</span> 
-                          <span style="color: var(--text-muted); margin-left: 6px;">(${formatDuration(iv.duration_hours || 0)})</span>
-                        </div>`;
-              }).join('');
-            } else {
-              intervalsHtml = '<div style="color: var(--red); font-weight: 600; padding: 4px;">Total Blackout</div>';
-            }
-          } else if (fixedItem.on_hours === 0) {
-            intervalsHtml = '<div style="color: var(--text-muted); font-weight: 600; padding: 4px;">No power logged on this day.</div>';
+      bar.addEventListener('click', () => {
+        bars.forEach(b => {
+           const fill = b.querySelector('.bar-fill');
+           if (fill) fill.style.opacity = '0.5';
+           b.querySelector('.bar-label').style.color = 'var(--text-muted)';
+        });
+        const activeFill = bar.querySelector('.bar-fill');
+        if (activeFill) activeFill.style.opacity = '1';
+        bar.querySelector('.bar-label').style.color = 'var(--text-main)';
+        
+        const idx = parseInt(bar.getAttribute('data-index'));
+        const fixedItem = fixedData[idx];
+        if (!fixedItem) return;
+        
+        const dateStr = fixedItem.dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        const dayData = fixedItem.original || {};
+        
+        let intervalsHtml = '<div style="color: var(--text-muted); font-style: italic;">Aggregated data only. Update backend to see granular spans.</div>';
+        
+        if (dayData.intervals && dayData.intervals.length > 0) {
+          const onSpans = dayData.intervals.filter(iv => iv.status === 'ON' || iv.status === 'LIKELY_ON');
+          if (onSpans.length > 0) {
+            intervalsHtml = onSpans.map(iv => {
+              const start = formatTime(iv.start_time);
+              const endD = new Date(new Date(iv.start_time).getTime() + ((iv.duration_hours || 0) * 3600 * 1000));
+              const end = formatTime(endD.toISOString());
+              return `<div style="background: var(--bg-surface); padding: 6px 10px; border-radius: 4px; display: inline-block; margin: 4px; border: 1px solid var(--border);">
+                        <span style="color: var(--primary); font-weight: 600;">${start} → ${end}</span> 
+                        <span style="color: var(--text-muted); margin-left: 6px;">(${formatDuration(iv.duration_hours || 0)})</span>
+                      </div>`;
+            }).join('');
+          } else {
+            intervalsHtml = '<div style="color: var(--red); font-weight: 600; padding: 4px;">Total Blackout</div>';
           }
-
-          matrixContainer.style.display = 'block';
-          matrixContainer.style.animation = 'none';
-          void matrixContainer.offsetWidth; // trigger reflow
-          matrixContainer.style.animation = 'slide-down 0.3s ease-out';
-          matrixContainer.innerHTML = `
-            <div style="font-weight: 700; margin-bottom: 8px; display: flex; justify-content: space-between;">
-              <span>${dateStr} Log</span>
-              <span>${dayData.interruptions || 0} Interruptions</span>
-            </div>
-            <div style="margin-bottom: 10px;">Total Supply: <strong>${formatDuration(fixedItem.on_hours)}</strong></div>
-            <div>${intervalsHtml}</div>
-          `;
-        } catch (error) {
-          console.error("Error in bar interaction:", error);
+        } else if (fixedItem.on_hours === 0) {
+          intervalsHtml = '<div style="color: var(--text-muted); font-weight: 600; padding: 4px;">No power logged on this day.</div>';
         }
-      };
 
-      bar.addEventListener('click', handleInteraction);
+        matrixContainer.style.display = 'block';
+        matrixContainer.style.animation = 'none';
+        void matrixContainer.offsetWidth; // trigger reflow
+        matrixContainer.style.animation = 'slide-down 0.3s ease-out';
+        matrixContainer.innerHTML = `
+          <div style="font-weight: 700; margin-bottom: 8px; display: flex; justify-content: space-between;">
+            <span>${dateStr} Log</span>
+            <span>${dayData.interruptions || 0} Interruptions</span>
+          </div>
+          <div style="margin-bottom: 10px;">Total Supply: <strong>${formatDuration(fixedItem.on_hours)}</strong></div>
+          <div>${intervalsHtml}</div>
+        `;
+      });
     });
     
     // Auto-click the last bar
@@ -398,4 +388,21 @@ function renderChartSection(span) {
        }
     }
   }
+}
+
+function formatDuration(hours) { return hours + 'h'; }
+globalAnalyticsData = { 
+  daily_stats_parsed: [
+    { report_date: new Date().toISOString().split('T')[0], on_hours: 5, interruptions: 1, intervals: [] }
+  ], 
+  monthly_stats_parsed: [] 
+};
+renderChartSection('7D');
+console.log('Bars found:', document.querySelectorAll('.interactive-bar').length);
+try {
+  document.querySelectorAll('.interactive-bar')[6].click();
+  console.log('Matrix display:', document.getElementById('matrix-container').style.display);
+  console.log('Matrix content:', document.getElementById('matrix-container').innerHTML);
+} catch (e) {
+  console.error('Click error:', e);
 }

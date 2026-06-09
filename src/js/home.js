@@ -61,7 +61,7 @@ export function renderHome(container) {
     `;
 
     bindReportButtons();
-    
+
     const analyticsBanner = document.getElementById('collapsed-analytics-banner');
     if (analyticsBanner) {
       analyticsBanner.addEventListener('click', () => {
@@ -75,7 +75,7 @@ export function renderHome(container) {
 
     const btnInstall = document.getElementById('btn-install-pwa');
     if (btnInstall) btnInstall.addEventListener('click', triggerAppInstall);
-    
+
     const btnDismissInstall = document.getElementById('btn-dismiss-install');
     if (btnDismissInstall) {
       btnDismissInstall.addEventListener('click', () => {
@@ -122,7 +122,7 @@ export function renderHome(container) {
             const oldText = `Reported by ${oldReportCount} ${oldReportCount === 1 ? 'person' : 'people'}`;
             const newText = `Reported by ${newReportCount} ${newReportCount === 1 ? 'person' : 'people'}`;
             newReportTextEl.innerHTML = `<span class="roll-up-wrapper"><span class="roll-up-inner roll-up-anim"><span style="color:transparent;">${newText}</span><span style="position:absolute;top:0;">${oldText}</span><span style="position:absolute;top:100%;">${newText}</span></span></span>`;
-            
+
             setTimeout(() => {
               const el = document.getElementById('report-count');
               if (el) el.innerHTML = newText;
@@ -139,12 +139,12 @@ export function renderHome(container) {
 
     const predictionContainer = document.getElementById('prediction-container');
     if (predictionContainer) predictionContainer.innerHTML = renderPrediction(areaStatus);
-    
+
     const headerStreakCount = document.getElementById('header-streak-count');
     if (headerStreakCount) {
       headerStreakCount.textContent = streak;
     }
-    
+
     const drawerContainer = document.getElementById('drawer-container');
     if (drawerContainer) {
       drawerContainer.innerHTML = renderNotificationDrawer(notifications);
@@ -198,7 +198,7 @@ function renderInstallBanner() {
   }
 
   if (!deferredPrompt) return '';
-  
+
   return `
     <div class="install-banner" id="pwa-install-banner" style="position: relative;">
       <button class="btn-dismiss-install" id="btn-dismiss-install" aria-label="Dismiss" style="position: absolute; top: 4px; right: 4px; background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 4px;">
@@ -225,7 +225,7 @@ function renderHeader(unreadCount = 0, streak = 0) {
   const badgeHtml = unreadCount > 0 ? `<div class="notif-badge"></div>` : '';
 
   const streakHtml = streak > 0 ? `
-    <button class="header-btn" id="btn-streak" aria-label="Streak" title="Streak" style="display: flex; align-items: center; gap: 4px; color: var(--amber); background: rgba(245, 158, 11, 0.1); border-radius: 12px; padding: 4px 8px; margin-right: 4px; border: 1px solid rgba(245, 158, 11, 0.2);">
+    <button class="header-btn" id="btn-streak" aria-label="Streak" title="Streak" style="display: flex; align-items: center; gap: 4px; color: var(--amber); background: rgba(245, 158, 11, 0.1); border-radius: 12px; padding: 4py 8px; margin-right: 4px; border: 1px solid rgba(245, 158, 11, 0.2);">
       <span>🔥</span><span id="header-streak-count" style="font-weight: 700; font-size: 0.9rem;">${streak}</span>
     </button>
   ` : '';
@@ -326,7 +326,7 @@ function bindHeaderEvents() {
       window.location.hash = '/settings';
     });
   }
-  
+
   const btnStreak = document.getElementById('btn-streak');
   if (btnStreak) {
     btnStreak.addEventListener('click', (e) => {
@@ -367,7 +367,7 @@ async function fetchCollapsedAnalytics(user) {
 
     const supplyText = document.getElementById('collapsed-supply-text');
     const trendText = document.getElementById('collapsed-supply-trend');
-    
+
     const todayTotal = data.today_supply_hours;
 
     if (supplyText) {
