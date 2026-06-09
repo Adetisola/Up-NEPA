@@ -176,113 +176,133 @@ function renderChartSection(span) {
   const allDaily = globalAnalyticsData.daily_stats_parsed;
   const allMonthly = globalAnalyticsData.monthly_stats_parsed;
 
-  let dataset = [];
-  let formatLabel = (d) => new Date(d.report_date).toLocaleDateString('en-US', { weekday: 'short' });
+  let fixedData = [];
   let hasMatrix = false;
+  const now = new Date();
   
   if (span === '7D') {
-    dataset = [...allDaily].slice(0, 7).reverse();
+    for (let i = 6; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const match = allDaily.find(x => x.report_date === dateStr);
+      fixedData.push({
+        dateObj: d,
+        label: d.toLocaleDateString('en-US', { weekday: 'short' }), // Mon, Tue...
+        on_hours: match ? match.on_hours : 0,
+        isToday: i === 0,
+        original: match
+      });
+    }
     hasMatrix = true;
   } else if (span === '30D') {
-    dataset = [...allDaily].slice(0, 30).reverse();
-    formatLabel = (d) => new Date(d.report_date).getDate();
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      const dateStr = d.toISOString().split('T')[0];
+      const match = allDaily.find(x => x.report_date === dateStr);
+      fixedData.push({
+        dateObj: d,
+        // Only show label every 5 days to avoid clutter
+        label: (i % 5 === 0 || i === 0) ? d.getDate() : '',
+        on_hours: match ? match.on_hours : 0,
+        isToday: i === 0,
+        original: match
+      });
+    }
     hasMatrix = true;
   } else if (span === '1Y') {
-    dataset = [...allMonthly];
-    formatLabel = (d) => new Date(d.report_month).toLocaleDateString('en-US', { month: 'short' });
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date();
+      d.setDate(1); // avoid end of month shifting bugs
+      d.setMonth(now.getMonth() - i);
+      const monthStr = d.toISOString().substring(0, 7);
+      const match = allMonthly.find(x => x.report_month === monthStr);
+      const daysInMonth = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+      fixedData.push({
+        dateObj: d,
+        label: d.toLocaleDateString('en-US', { month: 'short' }), // Jan, Feb...
+        on_hours: match ? (match.on_hours / daysInMonth) : 0, // average daily hours
+        isToday: i === 0,
+        original: match
+      });
+    }
     hasMatrix = false;
   }
 
   // Calculate average
   let totalHours = 0;
-  let totalDaysInDataset = 0;
-  
-  if (span === '1Y') {
-    dataset.forEach(m => {
-      totalHours += (m.on_hours || 0);
-      // Rough approximation for monthly avg: 30 days per month
-      totalDaysInDataset += 30;
-    });
-  } else {
-    dataset.forEach(d => totalHours += (d.on_hours || 0));
-    totalDaysInDataset = Math.max(dataset.length, 1);
-  }
-  
+  let totalDaysInDataset = fixedData.length;
+  fixedData.forEach(d => totalHours += d.on_hours);
   const avgDailyHours = totalDaysInDataset > 0 ? (totalHours / totalDaysInDataset) : 0;
   
-  const maxAxisValue = 24; // Y-axis max is always 24h to keep scale consistent
+  const maxAxisValue = span === '1Y' ? 24 : 24; // Always 24 for daily avg/sum
   
   let chartHtml = `
-    <div class="card" style="margin-bottom: 20px; padding: 16px;">
+    <div class="card" style="margin-bottom: 20px; padding: 20px 16px;">
       <!-- Header & Toggle -->
-      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px;">
+      <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 30px;">
         <div>
-          <h3 style="font-size: 1rem; margin: 0; margin-bottom: 4px;">Supply Log</h3>
-          <div style="font-size: 0.8rem; color: var(--text-muted);">Avg: <strong style="color:var(--text-main);">${formatDuration(avgDailyHours)} / day</strong></div>
+          <h3 style="font-size: 1.1rem; margin: 0; margin-bottom: 4px; font-weight: 700;">Supply Log</h3>
+          <div style="font-size: 0.85rem; color: var(--text-muted);">Avg: <strong style="color:var(--text-main); font-weight: 700;">${formatDuration(avgDailyHours)} / day</strong></div>
         </div>
         
         <div style="background: var(--bg-surface); padding: 4px; border-radius: 20px; display: flex; gap: 2px;">
-          <button class="span-toggle ${span === '7D' ? 'active' : ''}" data-span="7D" style="border:none; background:${span === '7D' ? 'var(--primary-fade)' : 'transparent'}; color:${span === '7D' ? 'var(--primary)' : 'var(--text-muted)'}; padding: 4px 12px; border-radius: 16px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">7D</button>
-          <button class="span-toggle ${span === '30D' ? 'active' : ''}" data-span="30D" style="border:none; background:${span === '30D' ? 'var(--primary-fade)' : 'transparent'}; color:${span === '30D' ? 'var(--primary)' : 'var(--text-muted)'}; padding: 4px 12px; border-radius: 16px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">30D</button>
-          <button class="span-toggle ${span === '1Y' ? 'active' : ''}" data-span="1Y" style="border:none; background:${span === '1Y' ? 'var(--primary-fade)' : 'transparent'}; color:${span === '1Y' ? 'var(--primary)' : 'var(--text-muted)'}; padding: 4px 12px; border-radius: 16px; font-size: 0.75rem; font-weight: 600; cursor: pointer;">1Y</button>
+          <button class="span-toggle ${span === '7D' ? 'active' : ''}" data-span="7D" style="border:none; background:${span === '7D' ? 'var(--primary-fade)' : 'transparent'}; color:${span === '7D' ? 'var(--primary)' : 'var(--text-muted)'}; padding: 4px 12px; border-radius: 16px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">7D</button>
+          <button class="span-toggle ${span === '30D' ? 'active' : ''}" data-span="30D" style="border:none; background:${span === '30D' ? 'var(--primary-fade)' : 'transparent'}; color:${span === '30D' ? 'var(--primary)' : 'var(--text-muted)'}; padding: 4px 12px; border-radius: 16px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">30D</button>
+          <button class="span-toggle ${span === '1Y' ? 'active' : ''}" data-span="1Y" style="border:none; background:${span === '1Y' ? 'var(--primary-fade)' : 'transparent'}; color:${span === '1Y' ? 'var(--primary)' : 'var(--text-muted)'}; padding: 4px 12px; border-radius: 16px; font-size: 0.75rem; font-weight: 600; cursor: pointer; transition: all 0.2s;">1Y</button>
         </div>
       </div>
       
       <!-- Chart Area -->
-      <div style="position: relative; height: 160px; margin-bottom: 10px; padding-left: 28px;">
+      <div style="position: relative; height: 180px; margin-bottom: 10px; padding-right: 30px; padding-left: 10px;">
         
-        <!-- Y-Axis Grid -->
-        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 20px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none;">
-          <div style="border-top: 1px dashed var(--border-light); position: relative;">
-             <span style="position: absolute; left: 0; top: -8px; font-size: 0.6rem; color: var(--text-muted);">24h</span>
+        <!-- Y-Axis Grid (Right Aligned, Solid Subtle Lines) -->
+        <div style="position: absolute; top: 0; left: 0; right: 0; bottom: 24px; display: flex; flex-direction: column; justify-content: space-between; pointer-events: none;">
+          <div style="border-top: 1px solid rgba(255,255,255,0.05); position: relative; width: 100%;">
+             <span style="position: absolute; right: 0; top: -7px; font-size: 0.65rem; color: var(--text-muted); text-align: right; width: 25px;">24 h</span>
           </div>
-          <div style="border-top: 1px dashed var(--border-light); position: relative;">
-             <span style="position: absolute; left: 0; top: -8px; font-size: 0.6rem; color: var(--text-muted);">12h</span>
+          <div style="border-top: 1px solid rgba(255,255,255,0.05); position: relative; width: 100%;">
+             <span style="position: absolute; right: 0; top: -7px; font-size: 0.65rem; color: var(--text-muted); text-align: right; width: 25px;">12 h</span>
           </div>
-          <div style="border-top: 1px dashed var(--border-light); position: relative;">
-             <span style="position: absolute; left: 0; top: -8px; font-size: 0.6rem; color: var(--text-muted);">0h</span>
+          <div style="border-top: 1px solid rgba(255,255,255,0.05); position: relative; width: 100%;">
+             <span style="position: absolute; right: 0; top: -7px; font-size: 0.65rem; color: var(--text-muted); text-align: right; width: 25px;">0 h</span>
           </div>
         </div>
 
-        <!-- Scrollable Bars -->
-        <div id="bar-chart-container" style="display: flex; align-items: flex-end; justify-content: space-between; height: 100%; position: relative; z-index: 1; overflow-x: auto; scrollbar-width: none; padding-left: 10px; gap: ${span === '30D' ? '4px' : '0'};">
+        <!-- Bars Container -->
+        <div id="bar-chart-container" style="display: flex; align-items: flex-end; justify-content: space-between; height: 100%; position: relative; z-index: 1; overflow-x: auto; scrollbar-width: none; gap: ${span === '30D' ? '2px' : '0'};">
   `;
   
-  if (dataset.length === 0) {
-     chartHtml += '<div style="width: 100%; text-align: center; color: var(--text-muted); font-size: 0.8rem; margin-top: 60px;">No historical data available</div>';
-  } else {
-    dataset.forEach((d, i) => {
-      // For 1Y, d.on_hours is total for the month, so avg daily is total / 30.
-      let val = d.on_hours || 0;
-      if (span === '1Y') val = val / 30; // rough avg
-      
-      const heightPct = Math.min((val / maxAxisValue) * 100, 100);
-      const color = val >= 12 ? 'var(--green)' : 'var(--amber)';
-      const label = formatLabel(d);
-      const isInteractive = hasMatrix ? 'cursor: pointer;' : '';
-      
-      // Determine bar width
-      let barWidth = '16px';
-      if (span === '30D') barWidth = '8px';
-      if (span === '1Y') barWidth = '12px';
-      
-      chartHtml += `
-        <div class="interactive-bar" data-index="${i}" style="display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: ${span === '30D' ? '0 0 auto' : '1'}; min-width: ${span === '30D' ? '20px' : 'auto'}; height: 100%; ${isInteractive}">
-          <div style="width: 100%; display: flex; justify-content: center; height: calc(100% - 20px); align-items: flex-end;">
-            <div style="width: ${barWidth}; background-color: ${color}; height: ${Math.max(2, heightPct)}%; border-radius: 4px 4px 0 0; transition: transform 0.1s, opacity 0.2s; animation: grow-up 0.6s ease-out backwards; animation-delay: ${i * 0.02}s;" class="bar-fill"></div>
-          </div>
-          <div style="font-size: ${span === '30D' ? '0.55rem' : '0.6rem'}; color: var(--text-muted); font-weight: 600; height: 20px; display: flex; align-items: center; white-space: nowrap;" class="bar-label">${label}</div>
+  fixedData.forEach((d, i) => {
+    const heightPct = Math.min((d.on_hours / maxAxisValue) * 100, 100);
+    const color = d.on_hours >= 12 ? 'var(--green)' : 'var(--primary)';
+    const isInteractive = hasMatrix ? 'cursor: pointer;' : '';
+    
+    let barWidth = '16px';
+    if (span === '30D') barWidth = '6px';
+    if (span === '1Y') barWidth = '14px';
+
+    const labelBg = d.isToday ? 'background-color: var(--border-light); border-radius: 12px; padding: 2px 6px; display: flex; align-items: center; justify-content: center; color: var(--text-main);' : 'padding: 2px 6px; display: flex; align-items: center; justify-content: center;';
+    
+    chartHtml += `
+      <div class="interactive-bar" data-index="${i}" style="display: flex; flex-direction: column; align-items: center; justify-content: flex-end; flex: ${span === '30D' ? '0 0 auto' : '1'}; min-width: ${span === '30D' ? '12px' : 'auto'}; height: 100%; ${isInteractive}">
+        <div style="width: 100%; display: flex; justify-content: center; height: calc(100% - 24px); align-items: flex-end;">
+          ${d.on_hours > 0 ? `<div style="width: ${barWidth}; background-color: ${color}; height: ${Math.max(2, heightPct)}%; border-radius: 4px 4px 0 0; transition: transform 0.1s, opacity 0.2s; animation: grow-up 0.6s ease-out backwards; animation-delay: ${i * 0.02}s;" class="bar-fill"></div>` : ''}
         </div>
-      `;
-    });
-  }
+        <div style="font-size: ${span === '30D' ? '0.55rem' : '0.65rem'}; color: ${d.isToday ? 'var(--text-main)' : 'var(--text-muted)'}; font-weight: ${d.isToday ? '700' : '600'}; margin-top: 4px;">
+          <div style="${labelBg}">${d.label}</div>
+        </div>
+      </div>
+    `;
+  });
   
   chartHtml += `
         </div>
       </div>
       
-      ${hasMatrix ? `<div style="text-align: right; font-size: 0.7rem; color: var(--text-muted); margin-bottom: 5px;">(Tap bar for log matrix)</div>` : ''}
-      <div id="matrix-container" style="display: none; margin-top: 5px; padding-top: 15px; border-top: 1px dashed var(--border); font-size: 0.85rem;"></div>
+      ${hasMatrix ? `<div style="text-align: left; font-size: 0.75rem; color: var(--text-muted); margin-top: 15px;">Tap any bar to see detailed log matrix.</div>` : ''}
+      <div id="matrix-container" style="display: none; margin-top: 15px; padding-top: 15px; border-top: 1px solid rgba(255,255,255,0.05); font-size: 0.85rem;"></div>
     </div>
   `;
 
@@ -307,17 +327,21 @@ function renderChartSection(span) {
     bars.forEach(bar => {
       bar.addEventListener('click', () => {
         bars.forEach(b => {
-           b.querySelector('.bar-fill').style.opacity = '0.5';
+           const fill = b.querySelector('.bar-fill');
+           if (fill) fill.style.opacity = '0.5';
            b.querySelector('.bar-label').style.color = 'var(--text-muted)';
         });
-        bar.querySelector('.bar-fill').style.opacity = '1';
+        const activeFill = bar.querySelector('.bar-fill');
+        if (activeFill) activeFill.style.opacity = '1';
         bar.querySelector('.bar-label').style.color = 'var(--text-main)';
         
         const idx = parseInt(bar.getAttribute('data-index'));
-        const dayData = dataset[idx];
-        if (!dayData) return;
+        const fixedItem = fixedData[idx];
+        if (!fixedItem) return;
         
-        const dateStr = new Date(dayData.report_date).toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        const dateStr = fixedItem.dateObj.toLocaleDateString('en-US', { weekday: 'long', month: 'short', day: 'numeric' });
+        const dayData = fixedItem.original || {};
+        
         let intervalsHtml = '<div style="color: var(--text-muted); font-style: italic;">Aggregated data only. Update backend to see granular spans.</div>';
         
         if (dayData.intervals && dayData.intervals.length > 0) {
@@ -327,7 +351,7 @@ function renderChartSection(span) {
               const start = formatTime(iv.start_time);
               const endD = new Date(new Date(iv.start_time).getTime() + ((iv.duration_hours || 0) * 3600 * 1000));
               const end = formatTime(endD.toISOString());
-              return `<div style="background: var(--bg-body); padding: 6px 10px; border-radius: 4px; display: inline-block; margin: 4px; border: 1px solid var(--border);">
+              return `<div style="background: var(--bg-surface); padding: 6px 10px; border-radius: 4px; display: inline-block; margin: 4px; border: 1px solid var(--border);">
                         <span style="color: var(--primary); font-weight: 600;">${start} → ${end}</span> 
                         <span style="color: var(--text-muted); margin-left: 6px;">(${formatDuration(iv.duration_hours || 0)})</span>
                       </div>`;
@@ -335,6 +359,8 @@ function renderChartSection(span) {
           } else {
             intervalsHtml = '<div style="color: var(--red); font-weight: 600; padding: 4px;">Total Blackout</div>';
           }
+        } else if (fixedItem.on_hours === 0) {
+          intervalsHtml = '<div style="color: var(--text-muted); font-weight: 600; padding: 4px;">No power logged on this day.</div>';
         }
 
         matrixContainer.style.display = 'block';
@@ -346,7 +372,7 @@ function renderChartSection(span) {
             <span>${dateStr} Log</span>
             <span>${dayData.interruptions || 0} Interruptions</span>
           </div>
-          <div style="margin-bottom: 10px;">Total Supply: <strong>${formatDuration(dayData.on_hours || 0)}</strong></div>
+          <div style="margin-bottom: 10px;">Total Supply: <strong>${formatDuration(fixedItem.on_hours)}</strong></div>
           <div>${intervalsHtml}</div>
         `;
       });
