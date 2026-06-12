@@ -6,18 +6,21 @@
 import {
   initSupabase,
   isSupabaseReady,
-  setDeviceId,
   fetchAreas,
   fetchAreaStatuses,
-  getOrCreateUser as sbGetOrCreateUser,
   submitReport as sbSubmitReport,
   updateUser as sbUpdateUser,
+  updateUserAreaRPC as sbUpdateUserAreaRPC,
   subscribeToAllAreaStatuses,
   fetchNotifications,
   markAllNotificationsAsRead,
   subscribeToNotifications,
+  getSession,
+  onAuthStateChange,
+  signUp,
+  signIn,
+  signOut,
 } from './supabase.js';
-import { generateFingerprint, generateRecoveryCode } from '../utils/fingerprint.js';
 
 const STORAGE_KEY_USER = 'upnepa_user';
 const STORAGE_KEY_STREAK = 'upnepa_streak';
@@ -26,7 +29,7 @@ const STORAGE_KEY_THEME = 'upnepa_theme';
 
 // ── Internal state ──────────────────────────────────
 let state = {
-  user: null,         // { id, deviceId, areaId, streak, lastReported, ... }
+  user: null,         // { id, email, displayName, areaId, streak, lastReported, ... }
   areas: [],          // Array of area objects
   statuses: {},       // areaId → status object
   reports: [],        // user's report history
@@ -63,13 +66,35 @@ function setState(updates) {
 // ── Initialization ──────────────────────────────────
 
 export async function initStore() {
-  // Load user from localStorage first (instant)
-  const savedUser = localStorage.getItem(STORAGE_KEY_USER);
-  if (savedUser) {
-    try {
-      state.user = JSON.parse(savedUser);
-    } catch {
-      state.user = null;
+  initSupabase();
+
+  if (isSupabaseReady()) {
+    const { data: { session } } = await getSession();
+    if (session?.user) {
+      // Create user object from auth session
+      const meta = session.user.user_metadata || {};
+      state.user = {
+        id: session.user.id,
+        email: session.user.email,
+        displayName: meta.display_name,
+        // areaId and streak will be populated later if needed, or fetched from profile
+      };
+      
+      onAuthStateChange((event, newSession) => {
+        if (event === 'SIGNED_OUT') {
+          state.user = null;
+          notify();
+        } else if (newSession?.user) {
+          const m = newSession.user.user_metadata || {};
+          state.user = {
+            id: newSession.user.id,
+            email: newSession.user.email,
+            displayName: m.display_name,
+            areaId: state.user?.areaId
+          };
+          notify();
+        }
+      });
     }
   }
 
@@ -92,11 +117,8 @@ export async function initStore() {
   }
   applyTheme(state.theme);
 
-  // Try to connect to Supabase
-  const deviceId = state.user?.deviceId || null;
-  initSupabase(deviceId);
-
-  if (isSupabaseReady()) {
+  // Streak and theme loading is kept intact below initStore's try block.
+  // We'll skip deviceId injection here because initSupabase() handles it now.
     try {
       // 1. Fetch Areas
       const dbAreas = await fetchAreas();
@@ -121,14 +143,14 @@ export async function initStore() {
       }
 
       // 4. Update user in DB if they exist locally
-      if (state.user && state.user.deviceId && state.user.areaId) {
-        setDeviceId(state.user.deviceId); // Set header before API call to satisfy RLS
-        // Ensure user exists in DB
-        const dbUser = await sbGetOrCreateUser(state.user.deviceId, state.user.areaId);
-        if (dbUser) {
-          state.user.id = dbUser.id;
-          state.user.lastReported = dbUser.last_reported;
-          localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
+      // Ensure we have profile data
+      if (state.user?.id && isSupabaseReady()) {
+        const { data: profile } = await getClient().from('users').select('*').eq('id', state.user.id).maybeSingle();
+        if (profile) {
+          state.user.areaId = profile.area_id;
+          state.user.streak = profile.streak;
+          state.user.changeCount = profile.change_count;
+          state.user.lastAreaChange = profile.last_area_change;
         }
       }
 
@@ -138,7 +160,6 @@ export async function initStore() {
     } catch (err) {
       console.warn('[Up NEPA] Supabase fetch failed', err);
     }
-  }
 
   state.initialized = true;
   notify();
@@ -178,48 +199,64 @@ export function updateAreaStatusLocal(newStatus) {
 
 // ── User Management ─────────────────────────────────
 
-export async function createUser(areaId) {
-  const deviceId = await generateFingerprint();
-  const recoveryCode = generateRecoveryCode();
-
-  // Local user object
-  const user = {
-    deviceId,
-    recoveryCode,
-    areaId,
-    streak: 0,
-    streakLastDate: null,
-    lastReported: null,
-    createdAt: new Date().toISOString(),
-  };
-
-  // Try to create in Supabase
-  if (isSupabaseReady()) {
-    setDeviceId(deviceId);
-    const dbUser = await sbGetOrCreateUser(deviceId, areaId, recoveryCode);
-    if (dbUser) {
-      user.id = dbUser.id; // Store the server-side UUID
-      state.online = true;
-    }
+export async function signUpUser(email, password, displayName, areaId) {
+  if (!isSupabaseReady()) return null;
+  const res = await signUp(email, password, displayName, areaId, null);
+  if (res.error) throw res.error;
+  
+  if (res.data?.user) {
+    state.user = {
+      id: res.data.user.id,
+      email: email,
+      displayName: displayName,
+      areaId: areaId,
+      streak: 0,
+      createdAt: new Date().toISOString()
+    };
+    notify();
+    return state.user;
   }
+  return null;
+}
 
-  state.user = user;
-  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(user));
+export async function signInUser(email, password) {
+  if (!isSupabaseReady()) return null;
+  const res = await signIn(email, password);
+  if (res.error) throw res.error;
+  
+  if (res.data?.user) {
+    const meta = res.data.user.user_metadata || {};
+    state.user = {
+      id: res.data.user.id,
+      email: res.data.user.email,
+      displayName: meta.display_name,
+    };
+    notify();
+    return state.user;
+  }
+  return null;
+}
 
+export async function signOutUser() {
+  if (!isSupabaseReady()) return;
+  await signOut();
+  state.user = null;
   notify();
-  return user;
 }
 
 export async function updateUserArea(areaId) {
   if (!state.user) return;
-  state.user.areaId = areaId;
-  localStorage.setItem(STORAGE_KEY_USER, JSON.stringify(state.user));
-
+  
   // Sync to Supabase
   if (isSupabaseReady() && state.user.id) {
-    await sbUpdateUser(state.user.id, { area_id: areaId });
+    await sbUpdateUserAreaRPC(areaId);
   }
 
+  // Update local state after successful backend update
+  state.user.areaId = areaId;
+  state.user.streak = 0;
+  state.user.changeCount = (state.user.changeCount || 0) + 1;
+  state.user.lastAreaChange = new Date().toISOString();
   notify();
 }
 
@@ -280,7 +317,7 @@ export async function addReport(status) {
 
   const report = {
     id: `report-${Date.now()}`,
-    userId: state.user.deviceId,
+    userId: state.user.id,
     areaId: state.user.areaId,
     status,
     createdAt: new Date().toISOString(),

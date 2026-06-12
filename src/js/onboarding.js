@@ -4,11 +4,13 @@
    ====================================================== */
 
 import { navigate } from './router.js';
-import { createUser, getState, getUser } from './data/store.js';
-import { subscribeToPush } from '../main.js';
+import { signUpUser, signInUser, getState, getUser } from './data/store.js';
+import { subscribeToPush } from './utils/push.js';
+import { resetPassword } from './data/supabase.js';
 
 let currentScreen = 0;
 let selectedAreaId = null;
+let isSignInMode = false;
 
 const screens = [
   renderWelcome,
@@ -33,15 +35,29 @@ function renderScreen(container) {
 }
 
 async function nextScreen(container) {
-  if (currentScreen === 2 && selectedAreaId) {
-    // We are leaving the Notifications screen and entering the Done screen.
-    // Create the user now so we can display the recovery code on the Done screen.
-    const user = getUser();
-    if (!user || !user.recoveryCode) {
-      document.body.style.cursor = 'wait';
-      await createUser(selectedAreaId);
+  if (currentScreen === 0) {
+    const email = document.getElementById('auth-email').value;
+    const password = document.getElementById('auth-password').value;
+    
+    document.body.style.cursor = 'wait';
+    try {
+      if (isSignInMode) {
+        await signInUser(email, password);
+      } else {
+        const name = document.getElementById('auth-name').value;
+        // areaId will be updated later, pass null for now
+        await signUpUser(email, password, name, null);
+      }
+    } catch (e) {
+      if (e.message.toLowerCase().includes('rate limit')) {
+        alert('Supabase rate limit exceeded. Since we bypassed email verification, just use a fake email (like timi123@test.com) to test, or click "Already have one? Sign in" below if your account is already created!');
+      } else {
+        alert(e.message);
+      }
       document.body.style.cursor = 'default';
+      return;
     }
+    document.body.style.cursor = 'default';
   }
 
   if (currentScreen < screens.length - 1) {
@@ -58,25 +74,29 @@ function renderWelcome() {
       <div class="onboarding-content">
         <div class="onboarding-bolt">⚡</div>
         <h1 class="onboarding-title">
-          Welcome to <span class="brand">Up NEPA</span>
+          ${isSignInMode ? 'Welcome Back' : 'Create your account'}
         </h1>
         <p class="onboarding-subtitle">
-          Know when light is coming — before it arrives.
-          Community-powered electricity status for Magboro.
+          ${isSignInMode ? 'Sign in to continue.' : 'Join the community.'}
         </p>
-        <div class="onboarding-actions" style="display: flex; flex-direction: column; gap: 15px;">
-          <button class="btn btn-primary btn-block btn-lg" id="btn-get-started">
-            Get Started
+        <form class="onboarding-actions" id="auth-form" novalidate style="display: flex; flex-direction: column; gap: 15px;">
+          ${!isSignInMode ? `
+          <input type="text" id="auth-name" placeholder="Display name" class="input" style="width: 100%; box-sizing: border-box;">
+          ` : ''}
+          <input type="email" id="auth-email" placeholder="Email" class="input" style="width: 100%; box-sizing: border-box;">
+          <input type="password" id="auth-password" placeholder="Password" class="input" style="width: 100%; box-sizing: border-box;">
+          
+          <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-auth-submit">
+            ${isSignInMode ? 'Sign In' : 'Create Account'}
           </button>
           
-          <div id="restore-section" style="margin-top: 10px;">
-            <a href="#" id="btn-show-restore" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline;">Restore previous session</a>
-            <div id="restore-form" style="display: none; margin-top: 15px;">
-              <input type="text" id="restore-code-input" placeholder="e.g. MGB-4X9" class="input" style="text-align: center; letter-spacing: 2px; text-transform: uppercase; margin-bottom: 10px;">
-              <button class="btn btn-secondary btn-block" id="btn-restore-session">Restore</button>
-            </div>
-          </div>
-        </div>
+          ${isSignInMode ? `
+          <a href="#" id="btn-forgot-password" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline;">Forgot password?</a>
+          <a href="#" id="btn-toggle-auth" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline; margin-top: 10px;">Create an account instead</a>
+          ` : `
+          <a href="#" id="btn-toggle-auth" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline; margin-top: 10px;">Already have one? Sign in</a>
+          `}
+        </form>
       </div>
     </div>
   `;
@@ -86,29 +106,43 @@ function renderWelcome() {
 
 function renderAreaSelect() {
   const areas = getState().areas;
-  const options = areas.map((area) =>
-    `<option value="${area.id}">${area.city} — ${area.name}</option>`
-  ).join('');
+  const states = [...new Set(areas.map(a => a.state))];
+  
+  const stateOptions = states.map(s => `<option value="${s}">${s}</option>`).join('');
 
   return `
     <div class="onboarding" id="onboarding-screen">
       <div class="onboarding-content">
         <div class="onboarding-bolt">📍</div>
-        <h1 class="onboarding-title">Where do you stay?</h1>
-        <p class="onboarding-subtitle">
-          Select your area so we can show you the right power status.
-        </p>
-        <div class="onboarding-actions">
-          <div class="select-wrapper">
-            <select class="select" id="area-select">
-              <option value="" disabled selected>Choose your area...</option>
-              ${options}
-            </select>
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
+        <h1 class="onboarding-title">Find your area</h1>
+        <div class="onboarding-actions" style="display: flex; flex-direction: column; gap: 15px; text-align: left;">
+          <div>
+            <label style="font-size: 0.8rem; color: var(--text-muted);">State</label>
+            <div class="select-wrapper">
+              <select class="select" id="state-select">
+                <option value="" disabled selected>Choose state...</option>
+                ${stateOptions}
+              </select>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
           </div>
-          <button class="btn btn-primary btn-block btn-lg" id="btn-area-next" disabled>
+          
+          <div>
+            <label style="font-size: 0.8rem; color: var(--text-muted);">City / Town</label>
+            <div class="select-wrapper">
+              <select class="select" id="city-select" disabled>
+                <option value="" disabled selected>Choose city...</option>
+              </select>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+            </div>
+          </div>
+
+          <div id="feeder-container" style="display: none; max-height: 200px; overflow-y: auto; background: var(--surface-light); padding: 10px; border-radius: 8px;">
+            <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 10px;">Feeder</label>
+            <div id="feeder-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+          </div>
+
+          <button class="btn btn-primary btn-block btn-lg" id="btn-area-next" disabled style="margin-top: 10px;">
             Continue
           </button>
         </div>
@@ -160,23 +194,15 @@ function renderNotifications() {
 // ── Screen 4: Done ──────────────────────────────────
 
 function renderDone() {
-  const user = getUser();
-  const recoveryCode = user?.recoveryCode || 'Loading...';
-
   return `
     <div class="onboarding" id="onboarding-screen">
       <div class="onboarding-content">
         <div class="onboarding-bolt">🎉</div>
-        <h1 class="onboarding-title">You're all set!</h1>
+        <h1 class="onboarding-title">You're In</h1>
         <p class="onboarding-subtitle">
           Your area is set up. Start reporting to help your neighbours
           and build your streak.
         </p>
-        <div style="background: var(--surface-light); padding: 15px; border-radius: 8px; margin-bottom: 20px; border: 1px dashed var(--border);">
-          <p style="font-size: 0.8rem; color: var(--text-muted); margin-bottom: 5px;">Your Secret Recovery Code</p>
-          <div style="font-size: 1.5rem; font-weight: 800; letter-spacing: 2px; color: var(--primary);">${recoveryCode}</div>
-          <p style="font-size: 0.7rem; color: var(--text-muted); margin-top: 5px;">Save this code. You can use it to restore your profile and streak if you switch browsers.</p>
-        </div>
         <div class="onboarding-actions">
           <button class="btn btn-primary btn-block btn-lg" id="btn-go-home">
             See Your Status →
@@ -210,46 +236,85 @@ function renderDots(container) {
 // ── Event Binding ───────────────────────────────────
 
 function bindScreenEvents(container) {
-  // Screen 1: Get Started
-  const btnStart = document.getElementById('btn-get-started');
-  if (btnStart) {
-    btnStart.addEventListener('click', () => nextScreen(container));
-  }
-  
-  const btnShowRestore = document.getElementById('btn-show-restore');
-  const restoreForm = document.getElementById('restore-form');
-  const btnRestore = document.getElementById('btn-restore-session');
-  const restoreInput = document.getElementById('restore-code-input');
-  
-  if (btnShowRestore) {
-    btnShowRestore.addEventListener('click', (e) => {
+  // Screen 1: Welcome
+  const authForm = document.getElementById('auth-form');
+  if (authForm) {
+    authForm.addEventListener('submit', (e) => {
       e.preventDefault();
-      restoreForm.style.display = 'block';
-      btnShowRestore.style.display = 'none';
+      nextScreen(container);
     });
   }
   
-  if (btnRestore) {
-    btnRestore.addEventListener('click', async () => {
-      const code = restoreInput.value.trim().toUpperCase();
-      if (!code) return;
-      
-      // In MVP, we would query Supabase for this code and restore device_id locally.
-      // For now, just navigate to home (a real implementation would call restoreUser(code))
-      alert('Session restore is a Phase 2 feature!');
+  const btnToggleAuth = document.getElementById('btn-toggle-auth');
+  if (btnToggleAuth) {
+    btnToggleAuth.addEventListener('click', (e) => {
+      e.preventDefault();
+      isSignInMode = !isSignInMode;
+      renderScreen(container);
+    });
+  }
+  
+  const btnForgotPassword = document.getElementById('btn-forgot-password');
+  if (btnForgotPassword) {
+    btnForgotPassword.addEventListener('click', async (e) => {
+      e.preventDefault();
+      const email = document.getElementById('auth-email').value;
+      if (!email) return alert('Enter your email first');
+      await resetPassword(email);
+      alert('Password reset email sent');
     });
   }
 
   // Screen 2: Area Selection
-  const areaSelect = document.getElementById('area-select');
+  const stateSelect = document.getElementById('state-select');
+  const citySelect = document.getElementById('city-select');
+  const feederContainer = document.getElementById('feeder-container');
+  const feederList = document.getElementById('feeder-list');
   const btnAreaNext = document.getElementById('btn-area-next');
-  if (areaSelect && btnAreaNext) {
-    areaSelect.addEventListener('change', (e) => {
-      selectedAreaId = e.target.value;
-      btnAreaNext.disabled = !selectedAreaId;
+  
+  if (stateSelect && citySelect) {
+    const areas = getState().areas;
+    
+    stateSelect.addEventListener('change', (e) => {
+      const state = e.target.value;
+      const cities = [...new Set(areas.filter(a => a.state === state).map(a => a.city))];
+      citySelect.innerHTML = '<option value="" disabled selected>Choose city...</option>' + 
+        cities.map(c => `<option value="${c}">${c}</option>`).join('');
+      citySelect.disabled = false;
+      feederContainer.style.display = 'none';
+      btnAreaNext.disabled = true;
     });
-    btnAreaNext.addEventListener('click', () => {
+    
+    citySelect.addEventListener('change', (e) => {
+      const city = e.target.value;
+      const state = stateSelect.value;
+      const feeders = areas.filter(a => a.state === state && a.city === city);
+      
+      feederList.innerHTML = feeders.map(f => `
+        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
+          <input type="radio" name="feeder" value="${f.id}" style="margin-top: 4px;">
+          <div>
+            <div style="font-weight: bold;">${f.name}</div>
+            <div style="font-size: 0.75rem; color: var(--text-muted);">${f.streets?.join(', ') || ''}</div>
+          </div>
+        </label>
+      `).join('');
+      
+      feederContainer.style.display = 'block';
+      
+      feederList.querySelectorAll('input[type="radio"]').forEach(radio => {
+        radio.addEventListener('change', (e) => {
+          selectedAreaId = e.target.value;
+          btnAreaNext.disabled = false;
+        });
+      });
+    });
+    
+    btnAreaNext.addEventListener('click', async () => {
       if (selectedAreaId) {
+        import('./data/store.js').then(async m => {
+          await m.updateUserArea(selectedAreaId);
+        });
         nextScreen(container);
       }
     });

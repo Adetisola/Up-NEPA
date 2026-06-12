@@ -48,15 +48,3 @@ export async function generateFingerprint() {
   return await sha256(rawFingerprint);
 }
 
-/**
- * Generates a memorable 6-digit recovery code (e.g. MGB-4X9)
- */
-export function generateRecoveryCode() {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // No I, O, 1, 0
-  let code = '';
-  for (let i = 0; i < 6; i++) {
-    if (i === 3) code += '-';
-    code += chars.charAt(Math.floor(Math.random() * chars.length));
-  }
-  return code;
-}

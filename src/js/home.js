@@ -9,21 +9,19 @@ import {
   getState,
   getUserArea,
   getUserAreaStatus,
-  getNearbyStatuses,
   getUser,
   formatTimeAgo,
   getNotifications,
   getUnreadCount,
   formatDuration,
 } from './data/store.js';
-import { getAreaPatterns, getTodaySupplySummary, getExpandedAnalytics } from './data/supabase.js';
+import { getTodaySupplySummary, getExpandedAnalytics } from './data/supabase.js';
 import { renderStatusCard } from './components/status-card.js';
-import { renderNearbyAreas } from './components/nearby-area.js';
 import { renderNotificationDrawer, bindNotificationDrawer } from './components/notification-drawer.js';
 import { bindReportButtons } from './reporting.js';
 import { renderStreakPopover } from './components/streak-popover.js';
 
-import { deferredPrompt, triggerAppInstall } from '../main.js';
+import { deferredPrompt, triggerAppInstall } from './utils/pwa.js';
 
 let unsubscribe = null;
 let timeUpdateInterval = null;
@@ -42,7 +40,6 @@ export function renderHome(container) {
     const user = getUser();
     const area = getUserArea();
     const areaStatus = getUserAreaStatus();
-    const nearbyStatuses = getNearbyStatuses();
     const streak = user?.streak || 0;
     const notifications = getNotifications();
     const unreadCount = getUnreadCount();
@@ -54,8 +51,8 @@ export function renderHome(container) {
         <div id="status-card-container">${renderStatusCard(areaStatus, area)}</div>
         <div id="report-buttons-container">${renderReportButtons(areaStatus)}</div>
         <div id="collapsed-analytics-container">${renderCollapsedAnalytics()}</div>
-        <div id="nearby-areas-container">${renderNearbyAreas(nearbyStatuses)}</div>
-        <div id="prediction-container">${renderPrediction(areaStatus)}</div>
+        <div id="coverage-health-container">${renderCoverageHealth(areaStatus)}</div>
+        <div id="sharing-banner-container">${renderSharingBanner()}</div>
       </main>
       <div id="drawer-container">${renderNotificationDrawer(notifications)}</div>
     `;
@@ -84,6 +81,19 @@ export function renderHome(container) {
         if (banner) banner.style.display = 'none';
       });
     }
+
+    const btnShare = document.getElementById('btn-share-app');
+    if (btnShare) {
+      btnShare.addEventListener('click', () => {
+        if (navigator.share) {
+          navigator.share({
+            title: 'Up NEPA',
+            text: 'Track electricity status in Magboro!',
+            url: window.location.href,
+          }).catch(err => console.error('Share failed', err));
+        }
+      });
+    }
   }
 
   function updateGranular() {
@@ -91,7 +101,6 @@ export function renderHome(container) {
     const user = getUser();
     const area = getUserArea();
     const areaStatus = getUserAreaStatus();
-    const nearbyStatuses = getNearbyStatuses();
     const streak = user?.streak || 0;
     const notifications = getNotifications();
 
@@ -133,12 +142,9 @@ export function renderHome(container) {
       }
     }
 
-    // 3. Other containers (these don't flicker objectionably or don't have interactions that interrupt)
-    const nearbyContainer = document.getElementById('nearby-areas-container');
-    if (nearbyContainer) nearbyContainer.innerHTML = renderNearbyAreas(nearbyStatuses);
-
-    const predictionContainer = document.getElementById('prediction-container');
-    if (predictionContainer) predictionContainer.innerHTML = renderPrediction(areaStatus);
+    // 3. Other containers
+    const coverageContainer = document.getElementById('coverage-health-container');
+    if (coverageContainer) coverageContainer.innerHTML = renderCoverageHealth(areaStatus);
 
     const headerStreakCount = document.getElementById('header-streak-count');
     if (headerStreakCount) {
@@ -286,32 +292,33 @@ function renderReportButtons(areaStatus) {
 }
 
 /**
- * Render the prediction section.
+ * Render Coverage Health Card
  */
-function renderPrediction(areaStatus) {
-  // Phase 2: For now, show placeholder
-  const isOff = areaStatus?.currentStatus === 'OFF' || areaStatus?.currentStatus === 'LIKELY_OFF';
-
-  let predictionText;
-  let icon;
-
-  if (isOff) {
-    predictionText = `Power in your area doesn't follow a consistent pattern yet. Keep reporting — predictions improve with more data.`;
-    icon = '🔮';
-  } else {
-    predictionText = `Your area is most reliable overnight. If you need stable power, evenings after 10pm are your best window.`;
-    icon = '🌙';
-  }
+function renderCoverageHealth(areaStatus) {
+  const activeCount = areaStatus?.active_reporters || 0;
+  if (activeCount >= 5) return ''; // Hidden when healthy
 
   return `
-    <div class="prediction-card" id="prediction-card">
-      <div class="section-label">Prediction</div>
-      <div class="prediction-icon">${icon}</div>
-      <p class="prediction-text">${predictionText}</p>
-      <div class="prediction-confidence">
-        <span>📈</span>
-        <span>Building patterns from community reports...</span>
-      </div>
+    <div class="card" style="margin-bottom: var(--space-lg); padding: var(--space-base); border-left: 4px solid var(--amber);">
+      <div style="font-weight: 600; margin-bottom: 8px;">Coverage Alert</div>
+      <p style="font-size: 0.9rem; color: var(--text-muted); margin-bottom: 12px; line-height: 1.4;">
+        👥 ${activeCount} active reporters on your feeder. Invite neighbours to improve accuracy.
+      </p>
+      <button class="btn btn-secondary btn-sm" id="btn-invite-neighbour">Invite a neighbour</button>
+    </div>
+  `;
+}
+
+/**
+ * Render Sharing Banner
+ */
+function renderSharingBanner() {
+  return `
+    <div class="card" style="padding: var(--space-base); background: var(--surface-light); text-align: center;">
+      <p style="font-size: 0.9rem; margin-bottom: 12px; font-weight: 500;">
+        ⚡ Know someone in Magboro? Share Up NEPA — help your community track light.
+      </p>
+      <button class="btn btn-primary btn-block" id="btn-share-app">Share the app</button>
     </div>
   `;
 }

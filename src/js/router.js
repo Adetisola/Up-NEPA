@@ -1,7 +1,7 @@
 import { renderHome } from './home.js';
 import { renderOnboarding } from './onboarding.js';
 import { renderSettings } from './settings.js';
-import { renderMap } from './map.js';
+import { renderExplore } from './explore.js';
 import { renderAnalytics } from './analytics.js';
 
 const routes = {};
@@ -16,7 +16,7 @@ export function route(path, handler) {
 route('/home', renderHome);
 route('/onboarding', renderOnboarding);
 route('/settings', renderSettings);
-route('/map', renderMap);
+route('/explore', renderExplore);
 route('/analytics', renderAnalytics);
 
 export function navigate(path) {

@@ -22,6 +22,56 @@ serve(async (req) => {
     const { type, areaId } = payload
 
     let notificationsSent = 0
+    let notificationsLogged = 0
+
+    // Fatigue cap: Max 3 notifications per user per 6 hours
+    async function canSendNotification(userId: string): Promise<boolean> {
+      const sixHoursAgo = new Date(Date.now() - 6 * 60 * 60 * 1000).toISOString()
+      const { count, error } = await supabase
+        .from('notifications')
+        .select('*', { count: 'exact', head: true })
+        .eq('user_id', userId)
+        .gte('created_at', sixHoursAgo)
+        
+      if (error) {
+        console.error(`Fatigue check error for user ${userId}:`, error)
+        return true // fail open
+      }
+      return (count !== null && count < 3)
+    }
+
+    async function processNotification(user: any, title: string, body: string, actions: any[]) {
+      const canSend = await canSendNotification(user.id)
+      if (!canSend) {
+        console.log(`Fatigue cap reached for user ${user.id}`)
+        return false
+      }
+
+      // 1. Log to DB
+      const { error: dbError } = await supabase.from('notifications').insert({
+        user_id: user.id,
+        title,
+        body
+      })
+      if (!dbError) notificationsLogged++
+
+      // 2. Send push (if they have a subscription)
+      if (user.push_subscription) {
+        try {
+          await webpush.sendNotification(user.push_subscription, JSON.stringify({
+            title,
+            body,
+            areaId: user.area_id,
+            userId: user.id,
+            actions
+          }))
+          notificationsSent++
+        } catch (e) {
+          console.error(`Push failed for user ${user.id}:`, e)
+        }
+      }
+      return true
+    }
 
     if (type === 'neighbour' && areaId) {
       // ── NEIGHBOUR TRIGGER ─────────────────────────────────
@@ -32,25 +82,13 @@ serve(async (req) => {
         .from('users')
         .select('id, push_subscription, area_id')
         .neq('area_id', areaId) // Users not in the triggered area
-        .not('push_subscription', 'is', null)
 
       if (!error && users) {
         for (const user of users) {
-          try {
-            await webpush.sendNotification(user.push_subscription, JSON.stringify({
-              title: "Up NEPA ⚡",
-              body: "Your neighbours just got light — has it reached you?",
-              areaId: user.area_id,
-              userId: user.id,
-              actions: [
-                { action: 'report-on', title: '✅ Yes it has' },
-                { action: 'report-off', title: '❌ Not yet' }
-              ]
-            }))
-            notificationsSent++
-          } catch (e) {
-            console.error(`Push failed for user ${user.id}:`, e)
-          }
+          await processNotification(user, "Up NEPA ⚡", "Your neighbours just got light — has it reached you?", [
+            { action: 'report-on', title: '✅ Yes it has' },
+            { action: 'report-off', title: '❌ Not yet' }
+          ])
         }
       }
     } else if (type === 'flash' && areaId) {
@@ -60,23 +98,13 @@ serve(async (req) => {
         .from('users')
         .select('id, push_subscription, area_id')
         .eq('area_id', areaId)
-        .not('push_subscription', 'is', null)
 
       if (users) {
         for (const user of users) {
-          try {
-            await webpush.sendNotification(user.push_subscription, JSON.stringify({
-              title: "Up NEPA ⚡",
-              body: "Quick flash or stable supply? Help your neighbours know if light is still on 👀",
-              areaId: user.area_id,
-              userId: user.id,
-              actions: [
-                { action: 'report-on', title: '✅ Still on' },
-                { action: 'report-off', title: '❌ Went off again' }
-              ]
-            }))
-            notificationsSent++
-          } catch (e) {}
+          await processNotification(user, "Up NEPA ⚡", "Quick flash or stable supply? Help your neighbours know if light is still on 👀", [
+            { action: 'report-on', title: '✅ Still on' },
+            { action: 'report-off', title: '❌ Went off again' }
+          ])
         }
       }
     } else if (type === 'stale') {
@@ -99,23 +127,13 @@ serve(async (req) => {
           .from('users')
           .select('id, push_subscription, area_id')
           .in('area_id', staleAreaIds)
-          .not('push_subscription', 'is', null)
 
         if (users) {
           for (const user of users) {
-            try {
-              await webpush.sendNotification(user.push_subscription, JSON.stringify({
-                title: "Up NEPA ⚡",
-                body: "Light still dey? Quick confirm for your area 🙏",
-                areaId: user.area_id,
-                userId: user.id,
-                actions: [
-                  { action: 'report-on', title: '✅ Still ON' },
-                  { action: 'report-off', title: '❌ It went off' }
-                ]
-              }))
-              notificationsSent++
-            } catch (e) {}
+            await processNotification(user, "Up NEPA ⚡", "Light still dey? Quick confirm for your area 🙏", [
+              { action: 'report-on', title: '✅ Still ON' },
+              { action: 'report-off', title: '❌ It went off' }
+            ])
           }
         }
       }
@@ -126,28 +144,18 @@ serve(async (req) => {
       const { data: users } = await supabase
         .from('users')
         .select('id, push_subscription, area_id')
-        .not('push_subscription', 'is', null)
 
       if (users) {
         for (const user of users) {
-          try {
-            await webpush.sendNotification(user.push_subscription, JSON.stringify({
-              title: "Up NEPA ⚡",
-              body: "Abi light dey your side? Help your neighbours know 👀",
-              areaId: user.area_id,
-              userId: user.id,
-              actions: [
-                { action: 'report-on', title: '✅ YES it\'s up' },
-                { action: 'report-off', title: '❌ NO it\'s out' }
-              ]
-            }))
-            notificationsSent++
-          } catch (e) {}
+          await processNotification(user, "Up NEPA ⚡", "Abi light dey your side? Help your neighbours know 👀", [
+            { action: 'report-on', title: '✅ YES it\'s up' },
+            { action: 'report-off', title: '❌ NO it\'s out' }
+          ])
         }
       }
     }
 
-    return new Response(JSON.stringify({ success: true, sent: notificationsSent }), {
+    return new Response(JSON.stringify({ success: true, sent: notificationsSent, logged: notificationsLogged }), {
       headers: { "Content-Type": "application/json" },
       status: 200,
     })

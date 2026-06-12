@@ -12,42 +12,19 @@ let deviceId = null;
 /**
  * Initialize the Supabase client.
  * Uses the global `supabase` object loaded from CDN.
- * Passes x-device-id header for anonymous RLS.
  */
-export function initSupabase(currentDeviceId) {
-  deviceId = currentDeviceId;
-
+export function initSupabase() {
   if (!window.supabase) {
     console.warn('[Up NEPA] Supabase CDN not loaded — running in offline mode');
     return null;
   }
 
-  const headers = {};
-  if (deviceId) {
-    headers['x-device-id'] = deviceId;
-  }
-
   supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    global: { headers },
-    auth: { persistSession: false }
+    auth: { persistSession: true }
   });
 
   console.log('[Up NEPA] Supabase connected');
   return supabase;
-}
-
-/**
- * Update the device ID header after user creation.
- * Re-creates the client with the new header.
- */
-export function setDeviceId(newDeviceId) {
-  deviceId = newDeviceId;
-  if (window.supabase) {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-      global: { headers: { 'x-device-id': deviceId } },
-      auth: { persistSession: false }
-    });
-  }
 }
 
 /**
@@ -112,22 +89,67 @@ export async function fetchAreaStatuses() {
 
 // ── Users ───────────────────────────────────────────
 
+// ── Auth ──────────────────────────────────────────────
+
+export async function signUp(email, password, displayName, areaId, fingerprintHash) {
+  if (!supabase) return { error: new Error('Supabase not initialized') };
+  const { data, error } = await supabase.auth.signUp({
+    email,
+    password,
+    options: {
+      data: { display_name: displayName }
+    }
+  });
+
+  if (error) return { error };
+
+  if (data.user) {
+    await getOrCreateProfile(data.user.id, areaId, displayName, email, fingerprintHash);
+  }
+
+  return { data };
+}
+
+export async function signIn(email, password) {
+  if (!supabase) return { error: new Error('Supabase not initialized') };
+  return await supabase.auth.signInWithPassword({ email, password });
+}
+
+export async function signOut() {
+  if (!supabase) return { error: new Error('Supabase not initialized') };
+  return await supabase.auth.signOut();
+}
+
+export async function getSession() {
+  if (!supabase) return { data: { session: null } };
+  return await supabase.auth.getSession();
+}
+
+export function onAuthStateChange(callback) {
+  if (!supabase) return { data: { subscription: { unsubscribe: () => {} } } };
+  return supabase.auth.onAuthStateChange(callback);
+}
+
+export async function resetPassword(email) {
+  if (!supabase) return { error: new Error('Supabase not initialized') };
+  return await supabase.auth.resetPasswordForEmail(email);
+}
+
 /**
- * Get or create a user by device_id.
- * On first call, inserts a new user. On subsequent calls, returns existing.
+ * Get or create user profile after Auth signup.
  */
-export async function getOrCreateUser(devId, areaId, recoveryCode = null) {
+export async function getOrCreateProfile(authUserId, areaId, displayName, email, fingerprintHash) {
   if (!supabase) return null;
 
-  // Try to find existing user
+  // Try to find existing profile
   const { data: existing, error: selectError } = await supabase
     .from('users')
     .select('*')
-    .eq('device_id', devId)
+    .eq('id', authUserId)
     .maybeSingle();
 
   if (selectError) {
-    console.error('[Up NEPA] getOrCreateUser select error:', selectError);
+    console.error('[Up NEPA] getOrCreateProfile select error:', selectError);
     return null;
   }
 
@@ -135,22 +157,25 @@ export async function getOrCreateUser(devId, areaId, recoveryCode = null) {
     return existing;
   }
 
-  // Create new user
-  const { data: newUser, error: insertError } = await supabase
+  // Create new profile linked to Auth UUID
+  const { data: newProfile, error: insertError } = await supabase
     .from('users')
-    .insert({ device_id: devId, area_id: areaId, recovery_code: recoveryCode })
+    .insert({ 
+      id: authUserId,
+      area_id: areaId, 
+      display_name: displayName, 
+      email: email,
+      fingerprint_hash: fingerprintHash 
+    })
     .select()
     .single();
 
   if (insertError) {
-    console.error('[Up NEPA] getOrCreateUser insert error:', insertError);
+    console.error('[Up NEPA] getOrCreateProfile insert error:', insertError);
     return null;
   }
 
-  // Update device ID header now that user exists
-  setDeviceId(devId);
-
-  return newUser;
+  return newProfile;
 }
 
 // ── Patterns (Prediction Engine) ────────────────────
@@ -198,10 +223,30 @@ export async function getExpandedAnalytics(areaId) {
 }
 
 /**
- * Update a user's area.
+ * Update a user's area securely using the progressive cooldown RPC.
+ */
+export async function updateUserAreaRPC(newAreaId) {
+  if (!supabase) return null;
+  const { data, error } = await supabase.rpc('change_user_area', { p_new_area_id: newAreaId });
+  
+  if (error) {
+    console.error('[Up NEPA] change_user_area error:', error);
+    throw error;
+  }
+  return data;
+}
+
+/**
+ * Generic update for user settings (except area)
  */
 export async function updateUser(userId, updates) {
   if (!supabase) return null;
+  // If attempting to update area directly, warn and block
+  if (updates.area_id) {
+    console.warn('[Up NEPA] Use updateUserAreaRPC to change area.');
+    delete updates.area_id;
+  }
+  
   const { data, error } = await supabase
     .from('users')
     .update(updates)

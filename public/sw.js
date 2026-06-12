@@ -75,7 +75,7 @@ self.addEventListener('push', (event) => {
 
   let data = {
     title: 'Up NEPA ⚡',
-    body: 'Abi light dey your side?',
+    body: 'Hey, is there light at your end?',
     areaId: null,
     userId: null,
     deviceId: null,
@@ -91,8 +91,8 @@ self.addEventListener('push', (event) => {
 
   // Determine actions (use defaults if none provided in payload)
   const notificationActions = data.actions || [
-    { action: 'report-on', title: '✅ YES it\'s up' },
-    { action: 'report-off', title: '❌ NO it\'s out' },
+    { action: 'report-on', title: '✅ Yes, we have light' },
+    { action: 'report-off', title: '❌ No, it\'s off' },
   ];
 
   const options = {

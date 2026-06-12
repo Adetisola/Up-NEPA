@@ -539,6 +539,37 @@
   width: 100%;
 }
 
+/* ── Inputs & Textareas ──────────────────────────────── */
+.input {
+  width: 100%;
+  padding: var(--space-base) var(--space-lg);
+  background: var(--bg-card);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-lg);
+  color: var(--text-primary);
+  font-family: var(--font);
+  font-size: var(--fs-base);
+  font-weight: var(--fw-medium);
+  transition: all var(--duration-fast);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--amber);
+  box-shadow: 0 0 0 3px var(--amber-glow);
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+textarea.input {
+  resize: none;
+  overflow: hidden;
+  min-height: 48px;
+  line-height: 1.5;
+}
+
 /* ── Select / Dropdown ──────────────────────────────── */
 .select-wrapper {
   position: relative;
