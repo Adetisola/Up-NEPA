@@ -231,6 +231,18 @@ export async function signInUser(email, password) {
       email: res.data.user.email,
       displayName: meta.display_name,
     };
+
+    // Fetch profile to see if they already have an area assigned
+    const { getClient } = await import('./supabase.js');
+    const { data: profile } = await getClient().from('users').select('*').eq('id', state.user.id).maybeSingle();
+    
+    if (profile) {
+      state.user.areaId = profile.area_id;
+      state.user.streak = profile.streak;
+      state.user.changeCount = profile.change_count;
+      state.user.lastAreaChange = profile.last_area_change;
+    }
+
     notify();
     return state.user;
   }

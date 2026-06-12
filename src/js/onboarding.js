@@ -43,6 +43,12 @@ async function nextScreen(container) {
     try {
       if (isSignInMode) {
         await signInUser(email, password);
+        const user = getState().user;
+        if (user && user.areaId) {
+          document.body.style.cursor = 'default';
+          navigate('/home');
+          return;
+        }
       } else {
         const name = document.getElementById('auth-name').value;
         // areaId will be updated later, pass null for now
@@ -81,10 +87,10 @@ function renderWelcome() {
         </p>
         <form class="onboarding-actions" id="auth-form" novalidate style="display: flex; flex-direction: column; gap: 15px;">
           ${!isSignInMode ? `
-          <input type="text" id="auth-name" placeholder="Display name" class="input" style="width: 100%; box-sizing: border-box;">
+          <input type="text" id="auth-name" placeholder="Display name" autocomplete="name" class="input" style="width: 100%; box-sizing: border-box;">
           ` : ''}
-          <input type="email" id="auth-email" placeholder="Email" class="input" style="width: 100%; box-sizing: border-box;">
-          <input type="password" id="auth-password" placeholder="Password" class="input" style="width: 100%; box-sizing: border-box;">
+          <input type="email" id="auth-email" placeholder="Email" autocomplete="email" class="input" style="width: 100%; box-sizing: border-box;">
+          <input type="password" id="auth-password" placeholder="Password" autocomplete="${isSignInMode ? 'current-password' : 'new-password'}" class="input" style="width: 100%; box-sizing: border-box;">
           
           <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-auth-submit">
             ${isSignInMode ? 'Sign In' : 'Create Account'}
