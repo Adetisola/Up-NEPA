@@ -20,7 +20,12 @@ export function initSupabase() {
   }
 
   supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
-    auth: { persistSession: true }
+    auth: { 
+      persistSession: true,
+      experimental: {
+        passkey: true
+      }
+    }
   });
 
   console.log('[Up NEPA] Supabase connected');
@@ -414,4 +419,28 @@ export async function getUserStreakHistory(userId) {
     return [];
   }
   return data || [];
+}
+
+// ── Passkeys (WebAuthn) ─────────────────────────────
+
+/**
+ * Prompt the user to enroll a new passkey (e.g. Face ID, Touch ID).
+ * The user MUST be signed in to do this.
+ */
+export async function registerPasskey() {
+  if (!supabase) throw new Error('Supabase not initialized');
+  const { data, error } = await supabase.auth.registerPasskey();
+  if (error) throw error;
+  return data;
+}
+
+/**
+ * Prompt the user to sign in using an enrolled passkey.
+ * No email or password needed.
+ */
+export async function signInWithPasskey() {
+  if (!supabase) throw new Error('Supabase not initialized');
+  const { data, error } = await supabase.auth.signInWithPasskey();
+  if (error) throw error;
+  return data;
 }

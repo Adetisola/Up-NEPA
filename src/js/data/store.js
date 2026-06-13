@@ -20,6 +20,8 @@ import {
   signUp,
   signIn,
   signOut,
+  registerPasskey,
+  signInWithPasskey,
 } from './supabase.js';
 import { hashPin } from '../utils/crypto.js';
 
@@ -574,3 +576,5 @@ export async function clearUnreadNotifications() {
     await markAllNotificationsAsRead(state.user.id);
   }
 }
+
+export { registerPasskey, signInWithPasskey };

@@ -4,7 +4,7 @@
    ====================================================== */
 
 import { navigate } from './router.js';
-import { getUser, getUserArea, updateUserArea, getTheme, toggleTheme, getState, signOutUser } from './data/store.js';
+import { getUser, getUserArea, updateUserArea, getTheme, toggleTheme, getState, signOutUser, registerPasskey } from './data/store.js';
 import { showToast } from './components/toast.js';
 import { subscribeToPush } from './utils/push.js';
 
@@ -123,6 +123,17 @@ export function renderSettings(container) {
         <div class="settings-item">
           <span class="settings-item-label">Light Mode</span>
           <div class="toggle ${getTheme() === 'light' ? 'active' : ''}" id="toggle-theme" role="switch" aria-checked="${getTheme() === 'light'}" tabindex="0"></div>
+        </div>
+      </div>
+
+      <div class="settings-group">
+        <div class="settings-group-label">Security & Login</div>
+        <div class="settings-item" id="btn-setup-passkey-settings" style="cursor: pointer;">
+          <div style="display: flex; align-items: center; gap: 10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary);"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            <span class="settings-item-label">Enable Face ID / Touch ID</span>
+          </div>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="color: var(--text-muted);"><polyline points="9 18 15 12 9 6"/></svg>
         </div>
       </div>
 
@@ -259,6 +270,19 @@ function bindSettingsEvents() {
       } catch (err) {
         console.error('Install failed:', err);
         showToast('Could not open install prompt. You may need to install from browser menu.', 'error');
+      }
+    });
+  }
+
+  const btnSetupPasskeySettings = document.getElementById('btn-setup-passkey-settings');
+  if (btnSetupPasskeySettings) {
+    btnSetupPasskeySettings.addEventListener('click', async () => {
+      try {
+        await registerPasskey();
+        showToast('Passkey successfully registered!', 'success');
+      } catch (err) {
+        console.error(err);
+        showToast('Failed to register passkey. Try again.', 'error');
       }
     });
   }

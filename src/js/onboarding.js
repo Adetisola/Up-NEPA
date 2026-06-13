@@ -4,7 +4,7 @@
    ====================================================== */
 
 import { navigate } from './router.js';
-import { signUpUser, signInUser, getState, getUser, isLocalLocked, unlockLocalSession, signOutUser } from './data/store.js';
+import { signUpUser, signInUser, getState, getUser, isLocalLocked, unlockLocalSession, signOutUser, registerPasskey, signInWithPasskey } from './data/store.js';
 import { subscribeToPush } from './utils/push.js';
 import { resetPassword } from './data/supabase.js';
 
@@ -20,6 +20,7 @@ let tempAuthName = '';
 const screens = [
   renderWelcome,
   renderPin,
+  renderSetupPasskey,
   renderAreaSelect,
   renderNotifications,
   renderDone,
@@ -100,11 +101,12 @@ async function nextScreen(container) {
       if (isSignInMode) {
         await signInUser(tempAuthEmail, pin);
         const user = getState().user;
-        if (user && user.areaId) {
+        if (localStorage.getItem('upnepa_passkey_prompted') || (user && user.areaId)) {
           document.body.style.cursor = 'default';
           navigate('/home');
           return;
         }
+        // If not prompted yet, fall through to currentScreen++ (renderSetupPasskey)
       } else {
         const confirmPin = document.getElementById('auth-confirm-password').value;
         if (pin !== confirmPin) {
@@ -125,6 +127,16 @@ async function nextScreen(container) {
       return;
     }
     document.body.style.cursor = 'default';
+  }
+
+  if (currentScreen === 2) {
+    // Setup Passkey Screen (Skip/Continue)
+    localStorage.setItem('upnepa_passkey_prompted', 'true');
+    const user = getState().user;
+    if (user && user.areaId) {
+      navigate('/home');
+      return;
+    }
   }
 
   if (currentScreen < screens.length - 1) {
@@ -184,6 +196,10 @@ function renderWelcome() {
           </button>
           
           ${isSignInMode ? `
+          <button type="button" class="btn btn-block btn-lg" id="btn-auth-passkey" style="background: var(--bg-card); color: var(--text-color); border: 1px solid var(--border-color); display: flex; align-items: center; justify-content: center; gap: 10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path><path d="M9 12a3 3 0 1 0 6 0 3 3 0 1 0-6 0"></path></svg>
+            Sign in with Passkey
+          </button>
           <a href="#" id="btn-forgot-password" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline;">Forgot PIN?</a>
           <a href="#" id="btn-toggle-auth" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline; margin-top: 10px;">Create an account instead</a>
           ` : `
@@ -225,6 +241,34 @@ function renderPin() {
             Back
           </button>
         </form>
+      </div>
+    </div>
+  `;
+}
+
+// ── Screen 1c: Passkey Setup ────────────────────────────
+
+function renderSetupPasskey() {
+  return `
+    <div class="onboarding" id="onboarding-screen">
+      <div class="onboarding-content">
+        <div class="onboarding-bolt">🛡️</div>
+        <h1 class="onboarding-title">
+          Enable Face ID / Touch ID
+        </h1>
+        <p class="onboarding-subtitle" style="margin-bottom: 30px;">
+          Sign in instantly next time without typing your PIN.
+        </p>
+        <div class="onboarding-actions" style="display: flex; flex-direction: column; gap: 15px;">
+          <button class="btn btn-primary btn-block btn-lg" id="btn-setup-passkey" style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+            Setup Passkey
+          </button>
+          
+          <button class="btn btn-block btn-lg" id="btn-skip-passkey" style="background: transparent; color: var(--text-muted); box-shadow: none;">
+            Skip for now
+          </button>
+        </div>
       </div>
     </div>
   `;
@@ -411,6 +455,44 @@ function bindScreenEvents(container) {
         currentScreen--;
         renderScreen(container);
       }
+    });
+  }
+
+  const btnAuthPasskey = document.getElementById('btn-auth-passkey');
+  if (btnAuthPasskey) {
+    btnAuthPasskey.addEventListener('click', async (e) => {
+      e.preventDefault();
+      try {
+        await signInWithPasskey();
+        navigate('/home');
+      } catch (err) {
+        console.error(err);
+        alert('Passkey sign in failed or was cancelled.');
+      }
+    });
+  }
+
+  // Screen 1c: Passkey Setup
+  const btnSetupPasskey = document.getElementById('btn-setup-passkey');
+  if (btnSetupPasskey) {
+    btnSetupPasskey.addEventListener('click', async (e) => {
+      e.preventDefault();
+      try {
+        await registerPasskey();
+        alert('Passkey successfully registered!');
+        nextScreen(container);
+      } catch (err) {
+        console.error(err);
+        alert('Failed to register passkey. You can try again later in Settings.');
+      }
+    });
+  }
+
+  const btnSkipPasskey = document.getElementById('btn-skip-passkey');
+  if (btnSkipPasskey) {
+    btnSkipPasskey.addEventListener('click', (e) => {
+      e.preventDefault();
+      nextScreen(container);
     });
   }
 
