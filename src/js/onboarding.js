@@ -279,7 +279,6 @@ function renderSetupPasskey() {
 function renderAreaSelect() {
   const areas = getState().areas;
   const states = [...new Set(areas.map(a => a.state))];
-  
   const stateOptions = states.map(s => `<option value="${s}">${s}</option>`).join('');
 
   return `
@@ -287,13 +286,30 @@ function renderAreaSelect() {
       <div class="onboarding-content">
         <div class="onboarding-bolt">📍</div>
         <h1 class="onboarding-title">Find your area</h1>
-        <div class="onboarding-actions" style="display: flex; flex-direction: column; gap: 15px; text-align: left;">
+        
+        <!-- State 1: Location Request -->
+        <div id="area-step-location" style="display: flex; flex-direction: column; gap: 15px; text-align: center;">
+          <p class="onboarding-subtitle" style="margin-bottom: 20px;">
+            To find your area automatically, we need your location once. We don't store or track it.
+          </p>
+          <button class="btn btn-primary btn-block btn-lg" id="btn-allow-location" style="display: flex; align-items: center; justify-content: center; gap: 10px;">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="3 11 22 2 13 21 11 13 3 11"></polygon></svg>
+            Allow Location
+          </button>
+          <button class="btn btn-block btn-lg" id="btn-enter-manually" style="background: transparent; color: var(--text-muted); box-shadow: none;">
+            Enter Manually
+          </button>
+        </div>
+
+        <!-- State 2: Manual / Geocoded Entry -->
+        <div id="area-step-manual" style="display: none; flex-direction: column; gap: 15px; text-align: left;">
           <div>
             <label style="font-size: 0.8rem; color: var(--text-muted);">State</label>
             <div class="select-wrapper">
               <select class="select" id="state-select">
                 <option value="" disabled selected>Choose state...</option>
                 ${stateOptions}
+                <option value="other">Other State (Coming Soon)</option>
               </select>
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
             </div>
@@ -309,9 +325,31 @@ function renderAreaSelect() {
             </div>
           </div>
 
-          <div id="feeder-container" style="display: none; max-height: 200px; overflow-y: auto; background: var(--surface-light); padding: 10px; border-radius: 8px;">
-            <label style="font-size: 0.8rem; color: var(--text-muted); display: block; margin-bottom: 10px;">Feeder</label>
-            <div id="feeder-list" style="display: flex; flex-direction: column; gap: 10px;"></div>
+          <div id="feeder-container" style="display: none; flex-direction: column; gap: 8px;">
+            <label style="font-size: 0.8rem; color: var(--text-muted);">Select your feeder</label>
+            <div class="custom-dropdown" id="feeder-dropdown">
+              <div class="custom-dropdown-header" id="feeder-dropdown-header">
+                <span>Select feeder...</span>
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </div>
+              <div class="custom-dropdown-list" id="feeder-dropdown-list">
+                <!-- Populated dynamically -->
+              </div>
+            </div>
+            
+            <!-- Bill Helper -->
+            <div class="bill-helper" id="bill-helper-toggle">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>
+              <span>Not sure? Check your IBEDC bill</span>
+            </div>
+            <div class="bill-helper-content" id="bill-helper-content" style="display: none;">
+              <p>Look for the word <strong>FEEDER</strong> on your electricity bill to find your exact area name.</p>
+              <div class="bill-mockup">
+                <div class="bill-mockup-line">ACCOUNT NO: 123456789</div>
+                <div class="bill-mockup-line highlight">FEEDER: MAGBORO I</div>
+                <div class="bill-mockup-line">TARIFF: R2</div>
+              </div>
+            </div>
           </div>
 
           <button class="btn btn-primary btn-block btn-lg" id="btn-area-next" disabled style="margin-top: 10px;">
@@ -497,20 +535,118 @@ function bindScreenEvents(container) {
   }
 
   // Screen 2: Area Selection
+  const stepLocation = document.getElementById('area-step-location');
+  const stepManual = document.getElementById('area-step-manual');
+  const btnAllowLocation = document.getElementById('btn-allow-location');
+  const btnEnterManually = document.getElementById('btn-enter-manually');
+  
   const stateSelect = document.getElementById('state-select');
   const citySelect = document.getElementById('city-select');
   const feederContainer = document.getElementById('feeder-container');
-  const feederList = document.getElementById('feeder-list');
+  const feederDropdownHeader = document.getElementById('feeder-dropdown-header');
+  const feederDropdownList = document.getElementById('feeder-dropdown-list');
+  const billHelperToggle = document.getElementById('bill-helper-toggle');
+  const billHelperContent = document.getElementById('bill-helper-content');
   const btnAreaNext = document.getElementById('btn-area-next');
   
-  if (stateSelect && citySelect) {
+  if (stepLocation && stepManual) {
     const areas = getState().areas;
     
+    // --- Location Logic ---
+    btnEnterManually.addEventListener('click', (e) => {
+      e.preventDefault();
+      stepLocation.style.display = 'none';
+      stepManual.style.display = 'flex';
+    });
+
+    btnAllowLocation.addEventListener('click', (e) => {
+      e.preventDefault();
+      btnAllowLocation.disabled = true;
+      btnAllowLocation.innerHTML = '<span class="loader"></span> Detecting...';
+      
+      if (!navigator.geolocation) {
+        alert('Geolocation is not supported by your browser.');
+        btnEnterManually.click();
+        return;
+      }
+      
+      navigator.geolocation.getCurrentPosition(async (position) => {
+        try {
+          const lat = position.coords.latitude;
+          const lng = position.coords.longitude;
+          
+          // Use OpenStreetMap Nominatim API (Free, no key required)
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&zoom=10&addressdetails=1`, {
+            headers: {
+              'Accept-Language': 'en'
+            }
+          });
+          
+          if (!res.ok) throw new Error('Geocoding request failed');
+          
+          const data = await res.json();
+          console.log('[Up NEPA] OSM Geocoding Response:', data);
+          
+          let state = '';
+          let city = '';
+          
+          if (data && data.address) {
+            state = data.address.state ? data.address.state.replace(' State', '') : '';
+            // Try to find the most accurate city-like boundary
+            city = data.address.city || data.address.town || data.address.county || '';
+            console.log('[Up NEPA] Detected Location -> State:', state, 'City:', city);
+          }
+
+          // Move to manual screen and pre-fill
+          stepLocation.style.display = 'none';
+          stepManual.style.display = 'flex';
+          
+          if (state && Array.from(stateSelect.options).some(opt => opt.value === state)) {
+            stateSelect.value = state;
+            stateSelect.dispatchEvent(new Event('change'));
+            
+            // Wait a tick for city to populate
+            setTimeout(() => {
+              // OSM might return slightly different names, e.g., "Obafemi Owode" for Magboro.
+              // For MVP, if it matches exactly, select it.
+              if (city && Array.from(citySelect.options).some(opt => opt.value === city)) {
+                citySelect.value = city;
+                citySelect.dispatchEvent(new Event('change'));
+              } else {
+                console.log('[Up NEPA] City mismatch or outside coverage:', city);
+                // Don't alert here; user can manually select the city if state matched
+              }
+            }, 50);
+          } else {
+            console.log('[Up NEPA] State mismatch or outside coverage:', state);
+            alert('We detected a location outside our current coverage. Please select manually.');
+          }
+          
+        } catch (err) {
+          console.error(err);
+          alert('Could not detect location. Please enter manually.');
+          btnEnterManually.click();
+        }
+      }, (err) => {
+        console.warn(err);
+        btnEnterManually.click();
+      }, { enableHighAccuracy: false, timeout: 20000, maximumAge: 0 });
+    });
+
+    // --- Dropdown Cascading Logic ---
     stateSelect.addEventListener('change', (e) => {
       const state = e.target.value;
+      if (state === 'other') {
+        alert('We are currently expanding to other states. Check back soon!');
+        citySelect.disabled = true;
+        feederContainer.style.display = 'none';
+        btnAreaNext.disabled = true;
+        return;
+      }
       const cities = [...new Set(areas.filter(a => a.state === state).map(a => a.city))];
       citySelect.innerHTML = '<option value="" disabled selected>Choose city...</option>' + 
-        cities.map(c => `<option value="${c}">${c}</option>`).join('');
+        cities.map(c => `<option value="${c}">${c}</option>`).join('') +
+        '<option value="other">Other City (Coming Soon)</option>';
       citySelect.disabled = false;
       feederContainer.style.display = 'none';
       btnAreaNext.disabled = true;
@@ -518,27 +654,59 @@ function bindScreenEvents(container) {
     
     citySelect.addEventListener('change', (e) => {
       const city = e.target.value;
+      if (city === 'other') {
+        alert('We are currently expanding to other cities. Check back soon!');
+        feederContainer.style.display = 'none';
+        btnAreaNext.disabled = true;
+        return;
+      }
+      
       const state = stateSelect.value;
       const feeders = areas.filter(a => a.state === state && a.city === city);
       
-      feederList.innerHTML = feeders.map(f => `
-        <label style="display: flex; align-items: flex-start; gap: 10px; cursor: pointer;">
-          <input type="radio" name="feeder" value="${f.id}" style="margin-top: 4px;">
-          <div>
-            <div style="font-weight: bold;">${f.name}</div>
-            <div style="font-size: 0.75rem; color: var(--text-muted);">${f.streets?.join(', ') || ''}</div>
-          </div>
-        </label>
+      // Populate custom dropdown
+      feederDropdownList.innerHTML = feeders.map(f => `
+        <div class="custom-dropdown-item" data-id="${f.id}" data-name="${f.name}">
+          <div style="font-weight: bold; color: var(--text-color);">${f.name}</div>
+          <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">${f.streets?.join(', ') || ''}</div>
+        </div>
       `).join('');
       
-      feederContainer.style.display = 'block';
+      feederDropdownHeader.querySelector('span').textContent = 'Select feeder...';
+      selectedAreaId = null;
+      btnAreaNext.disabled = true;
+      feederContainer.style.display = 'flex';
       
-      feederList.querySelectorAll('input[type="radio"]').forEach(radio => {
-        radio.addEventListener('change', (e) => {
-          selectedAreaId = e.target.value;
+      // Bind custom dropdown items
+      feederDropdownList.querySelectorAll('.custom-dropdown-item').forEach(item => {
+        item.addEventListener('click', (e) => {
+          feederDropdownList.querySelectorAll('.custom-dropdown-item').forEach(el => el.classList.remove('selected'));
+          item.classList.add('selected');
+          selectedAreaId = item.getAttribute('data-id');
+          feederDropdownHeader.querySelector('span').textContent = item.getAttribute('data-name');
+          feederDropdownList.classList.remove('open');
           btnAreaNext.disabled = false;
         });
       });
+    });
+
+    // Custom Dropdown Open/Close
+    feederDropdownHeader.addEventListener('click', () => {
+      feederDropdownList.classList.toggle('open');
+    });
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', (e) => {
+      if (!feederDropdownHeader.contains(e.target) && !feederDropdownList.contains(e.target)) {
+        feederDropdownList.classList.remove('open');
+      }
+    });
+
+    // Bill Helper Toggle
+    billHelperToggle.addEventListener('click', () => {
+      const isVisible = billHelperContent.style.display === 'block';
+      billHelperContent.style.display = isVisible ? 'none' : 'block';
+      billHelperToggle.classList.toggle('active', !isVisible);
     });
     
     btnAreaNext.addEventListener('click', async () => {

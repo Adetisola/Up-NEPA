@@ -965,3 +965,124 @@ textarea.input {
   0% { transform: translateY(0); }
   100% { transform: translateY(-100%); }
 }
+
+/* ── Custom Dropdown ───────────────────────────────── */
+.custom-dropdown {
+  position: relative;
+  width: 100%;
+}
+
+.custom-dropdown-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0 var(--space-md);
+  height: 52px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  font-size: var(--fs-base);
+  color: var(--text-color);
+  cursor: pointer;
+  transition: all var(--ease-spring) 0.3s;
+}
+
+.custom-dropdown-header svg {
+  width: 20px;
+  height: 20px;
+  color: var(--text-muted);
+  transition: transform 0.3s;
+}
+
+.custom-dropdown-list.open + .custom-dropdown-header svg {
+  transform: rotate(180deg);
+}
+
+.custom-dropdown-list {
+  display: none;
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  z-index: 100;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
+.custom-dropdown-list.open {
+  display: flex;
+  flex-direction: column;
+}
+
+.custom-dropdown-item {
+  padding: var(--space-md);
+  border-bottom: 1px solid var(--border);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.custom-dropdown-item:last-child {
+  border-bottom: none;
+}
+
+.custom-dropdown-item:hover {
+  background: var(--surface-light);
+}
+
+.custom-dropdown-item.selected {
+  background: var(--primary-alpha);
+  border-left: 3px solid var(--primary);
+}
+
+/* ── Bill Helper ───────────────────────────────────── */
+.bill-helper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--primary);
+  font-size: 0.8rem;
+  cursor: pointer;
+  margin-top: 8px;
+  margin-bottom: 4px;
+}
+
+.bill-helper:hover {
+  text-decoration: underline;
+}
+
+.bill-helper-content {
+  background: var(--surface-light);
+  border-radius: var(--radius-md);
+  padding: var(--space-md);
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  border: 1px dashed var(--border);
+}
+
+.bill-mockup {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+  margin-top: 10px;
+  font-family: monospace;
+  font-size: 0.75rem;
+  color: var(--text-muted);
+}
+
+.bill-mockup-line {
+  margin-bottom: 4px;
+}
+
+.bill-mockup-line.highlight {
+  color: var(--text-color);
+  background: rgba(255, 235, 59, 0.2);
+  font-weight: bold;
+  padding: 2px 4px;
+  border-radius: 2px;
+  display: inline-block;
+}
