@@ -281,8 +281,12 @@ function bindSettingsEvents() {
         await registerPasskey();
         showToast('Passkey successfully registered!', 'success');
       } catch (err) {
-        console.error(err);
-        showToast('Failed to register passkey. Try again.', 'error');
+        console.error('Passkey registration error:', err);
+        if (err.name === 'NotAllowedError' || err.message.includes('not supported') || err.message.includes('cancelled')) {
+          showToast('Setup cancelled, or your device does not have a screen lock / biometrics enabled.', 'error');
+        } else {
+          showToast('Failed to register passkey. Try again.', 'error');
+        }
       }
     });
   }
