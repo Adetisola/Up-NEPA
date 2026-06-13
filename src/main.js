@@ -4,7 +4,7 @@
 
 import { inject } from '@vercel/analytics';
 import { route, startRouter, navigate } from './js/router.js';
-import { initStore, hasUser, getUser } from './js/data/store.js';
+import { initStore, hasUser, getUser, isLocalLocked } from './js/data/store.js';
 import { subscribeToPush } from './js/utils/push.js';
 import { initPWA } from './js/utils/pwa.js';
 
@@ -23,7 +23,7 @@ async function init() {
   await initStore();
 
   // Determine initial route
-  if (!hasUser()) {
+  if (!hasUser() || isLocalLocked()) {
     navigate('/onboarding');
   } else {
     const hash = window.location.hash.slice(1);

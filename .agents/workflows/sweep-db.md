@@ -15,7 +15,9 @@ If you have access to the Supabase MCP server (`execute_sql`), run this directly
 -- 1. Wipe out all test reports, notifications, users, patterns, and analytics
 TRUNCATE TABLE notifications CASCADE;
 TRUNCATE TABLE reports CASCADE;
-TRUNCATE TABLE users CASCADE;
+TRUNCATE TABLE public.users CASCADE;
+TRUNCATE TABLE auth.users CASCADE;
+TRUNCATE TABLE area_history CASCADE;
 TRUNCATE TABLE patterns CASCADE;
 TRUNCATE TABLE daily_analytics CASCADE;
 TRUNCATE TABLE flash_events CASCADE;

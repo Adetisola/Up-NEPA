@@ -3,6 +3,7 @@ import { renderOnboarding } from './onboarding.js';
 import { renderSettings } from './settings.js';
 import { renderExplore } from './explore.js';
 import { renderAnalytics } from './analytics.js';
+import { isLocalLocked } from './data/store.js';
 
 const routes = {};
 let currentRoute = null;
@@ -29,11 +30,16 @@ export function getCurrentRoute() {
 
 export function startRouter() {
   function handleRoute() {
-    const hash = window.location.hash.slice(1) || '/home';
+    let hash = window.location.hash.slice(1) || '/home';
     const app = document.getElementById('app');
     const bottomNav = document.getElementById('bottom-nav');
 
     if (!app) return;
+
+    if (isLocalLocked() && hash !== '/onboarding') {
+      window.location.hash = '/onboarding';
+      return; // hashchange will re-trigger
+    }
 
     if (hash === '/onboarding') {
       if (bottomNav) bottomNav.style.display = 'none';

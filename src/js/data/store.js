@@ -21,6 +21,7 @@ import {
   signIn,
   signOut,
 } from './supabase.js';
+import { hashPin } from '../utils/crypto.js';
 
 const STORAGE_KEY_USER = 'upnepa_user';
 const STORAGE_KEY_STREAK = 'upnepa_streak';
@@ -42,6 +43,7 @@ let state = {
 
 const listeners = new Set();
 let realtimeChannel = null;
+let isLocalLockActive = false; // Tracks if the PIN gate is active
 
 // ── Public API ──────────────────────────────────────
 
@@ -154,6 +156,11 @@ export async function initStore() {
         }
       }
 
+      // Determine if local lock should be active
+      if (state.user && localStorage.getItem('upnepa_pin_hash')) {
+        isLocalLockActive = true;
+      }
+
       // Setup Realtime subscriptions
       setupRealtime();
 
@@ -199,12 +206,17 @@ export function updateAreaStatusLocal(newStatus) {
 
 // ── User Management ─────────────────────────────────
 
-export async function signUpUser(email, password, displayName, areaId) {
+export async function signUpUser(email, pin, displayName, areaId) {
   if (!isSupabaseReady()) return null;
-  const res = await signUp(email, password, displayName, areaId, null);
+  const paddedPassword = `${pin}-UPNEPA`;
+  const res = await signUp(email, paddedPassword, displayName, areaId, null);
   if (res.error) throw res.error;
   
   if (res.data?.user) {
+    const hashed = await hashPin(pin);
+    localStorage.setItem('upnepa_pin_hash', hashed);
+    localStorage.setItem('upnepa_saved_email', email);
+
     state.user = {
       id: res.data.user.id,
       email: email,
@@ -219,12 +231,17 @@ export async function signUpUser(email, password, displayName, areaId) {
   return null;
 }
 
-export async function signInUser(email, password) {
+export async function signInUser(email, pin) {
   if (!isSupabaseReady()) return null;
-  const res = await signIn(email, password);
+  const paddedPassword = `${pin}-UPNEPA`;
+  const res = await signIn(email, paddedPassword);
   if (res.error) throw res.error;
   
   if (res.data?.user) {
+    const hashed = await hashPin(pin);
+    localStorage.setItem('upnepa_pin_hash', hashed);
+    localStorage.setItem('upnepa_saved_email', email);
+
     const meta = res.data.user.user_metadata || {};
     state.user = {
       id: res.data.user.id,
@@ -253,7 +270,29 @@ export async function signOutUser() {
   if (!isSupabaseReady()) return;
   await signOut();
   state.user = null;
+  isLocalLockActive = false;
+  localStorage.removeItem('upnepa_pin_hash');
+  localStorage.removeItem('upnepa_saved_email');
   notify();
+}
+
+export function isLocalLocked() {
+  return isLocalLockActive;
+}
+
+export async function unlockLocalSession(pin) {
+  const savedHash = localStorage.getItem('upnepa_pin_hash');
+  if (!savedHash) {
+    isLocalLockActive = false;
+    return true;
+  }
+  const inputHash = await hashPin(pin);
+  if (inputHash === savedHash) {
+    isLocalLockActive = false;
+    notify();
+    return true;
+  }
+  return false;
 }
 
 export async function updateUserArea(areaId) {

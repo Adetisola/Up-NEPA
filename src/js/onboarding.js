@@ -4,16 +4,22 @@
    ====================================================== */
 
 import { navigate } from './router.js';
-import { signUpUser, signInUser, getState, getUser } from './data/store.js';
+import { signUpUser, signInUser, getState, getUser, isLocalLocked, unlockLocalSession, signOutUser } from './data/store.js';
 import { subscribeToPush } from './utils/push.js';
 import { resetPassword } from './data/supabase.js';
 
 let currentScreen = 0;
 let selectedAreaId = null;
 let isSignInMode = false;
+let isLocalUnlockMode = false;
+let failedAttempts = 0;
+
+let tempAuthEmail = '';
+let tempAuthName = '';
 
 const screens = [
   renderWelcome,
+  renderPin,
   renderAreaSelect,
   renderNotifications,
   renderDone,
@@ -25,6 +31,7 @@ const screens = [
 export function renderOnboarding(container) {
   currentScreen = 0;
   selectedAreaId = null;
+  isLocalUnlockMode = isLocalLocked();
   renderScreen(container);
 }
 
@@ -36,13 +43,62 @@ function renderScreen(container) {
 
 async function nextScreen(container) {
   if (currentScreen === 0) {
+    if (isLocalUnlockMode) {
+      const pin = document.getElementById('auth-pin').value;
+      if (pin.length !== 4) {
+        alert('PIN must be 4 digits.');
+        return;
+      }
+      const success = await unlockLocalSession(pin);
+      if (success) {
+        failedAttempts = 0;
+        navigate('/home');
+      } else {
+        failedAttempts++;
+        if (failedAttempts >= 5) {
+          alert('Too many incorrect attempts. You have been logged out.');
+          await signOutUser();
+          isLocalUnlockMode = false;
+          failedAttempts = 0;
+          renderScreen(container);
+        } else {
+          alert(`Incorrect PIN. ${5 - failedAttempts} attempts remaining.`);
+          document.getElementById('auth-pin').value = '';
+        }
+      }
+      return;
+    }
+
     const email = document.getElementById('auth-email').value;
-    const password = document.getElementById('auth-password').value;
+    const nameInput = document.getElementById('auth-name');
     
+    if (!email) {
+      alert('Email is required');
+      return;
+    }
+    
+    tempAuthEmail = email;
+    if (!isSignInMode && nameInput) {
+      tempAuthName = nameInput.value;
+    }
+    
+    currentScreen++;
+    renderScreen(container);
+    return;
+  }
+  
+  if (currentScreen === 1) {
+    const pin = document.getElementById('auth-password').value;
+    
+    if (pin.length !== 4) {
+      alert('PIN must be 4 digits.');
+      return;
+    }
+
     document.body.style.cursor = 'wait';
     try {
       if (isSignInMode) {
-        await signInUser(email, password);
+        await signInUser(tempAuthEmail, pin);
         const user = getState().user;
         if (user && user.areaId) {
           document.body.style.cursor = 'default';
@@ -50,9 +106,14 @@ async function nextScreen(container) {
           return;
         }
       } else {
-        const name = document.getElementById('auth-name').value;
+        const confirmPin = document.getElementById('auth-confirm-password').value;
+        if (pin !== confirmPin) {
+          alert('PINs do not match — try again');
+          document.body.style.cursor = 'default';
+          return;
+        }
         // areaId will be updated later, pass null for now
-        await signUpUser(email, password, name, null);
+        await signUpUser(tempAuthEmail, pin, tempAuthName, null);
       }
     } catch (e) {
       if (e.message.toLowerCase().includes('rate limit')) {
@@ -75,33 +136,94 @@ async function nextScreen(container) {
 // ── Screen 1: Welcome ──────────────────────────────
 
 function renderWelcome() {
+  if (isLocalUnlockMode) {
+    const savedEmail = localStorage.getItem('upnepa_saved_email') || 'User';
+    return `
+      <div class="onboarding" id="onboarding-screen">
+        <div class="onboarding-content">
+          <div class="onboarding-bolt">👋</div>
+          <h1 class="onboarding-title">
+            Welcome back
+          </h1>
+          <p class="onboarding-subtitle">
+            ${savedEmail}
+          </p>
+          <form class="onboarding-actions" id="auth-form" style="display: flex; flex-direction: column; gap: 15px;">
+            <label style="font-size: 0.9rem; color: var(--text-muted); text-align: left;">Enter your PIN</label>
+            <input type="password" id="auth-pin" placeholder="••••" autocomplete="current-password" class="input" style="width: 100%; box-sizing: border-box; text-align: center; font-size: 2rem; letter-spacing: 0.5em;" maxlength="4" inputmode="numeric" pattern="[0-9]*">
+            
+            <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-auth-submit">
+              Unlock
+            </button>
+
+            <a href="#" id="btn-logout" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline; margin-top: 10px;">Not you? Sign out</a>
+          </form>
+        </div>
+      </div>
+    `;
+  }
+
   return `
     <div class="onboarding" id="onboarding-screen">
       <div class="onboarding-content">
         <div class="onboarding-bolt">⚡</div>
         <h1 class="onboarding-title">
-          ${isSignInMode ? 'Welcome Back' : 'Create your account'}
+          ${isSignInMode ? 'Sign in' : 'Create your account'}
         </h1>
         <p class="onboarding-subtitle">
-          ${isSignInMode ? 'Sign in to continue.' : 'Join the community.'}
+          ${isSignInMode ? 'Welcome back.' : 'Join the community.'}
         </p>
-        <form class="onboarding-actions" id="auth-form" novalidate style="display: flex; flex-direction: column; gap: 15px;">
+        <form class="onboarding-actions" id="auth-form" style="display: flex; flex-direction: column; gap: 15px;">
           ${!isSignInMode ? `
-          <input type="text" id="auth-name" placeholder="Display name" autocomplete="name" class="input" style="width: 100%; box-sizing: border-box;">
+          <input type="text" id="auth-name" placeholder="Display name" autocomplete="name" class="input" style="width: 100%; box-sizing: border-box;" value="${tempAuthName}">
           ` : ''}
-          <input type="email" id="auth-email" placeholder="Email" autocomplete="email" class="input" style="width: 100%; box-sizing: border-box;">
-          <input type="password" id="auth-password" placeholder="Password" autocomplete="${isSignInMode ? 'current-password' : 'new-password'}" class="input" style="width: 100%; box-sizing: border-box;">
+          <input type="email" id="auth-email" placeholder="Email" autocomplete="email" class="input" style="width: 100%; box-sizing: border-box;" value="${tempAuthEmail}">
           
           <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-auth-submit">
-            ${isSignInMode ? 'Sign In' : 'Create Account'}
+            Continue
           </button>
           
           ${isSignInMode ? `
-          <a href="#" id="btn-forgot-password" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline;">Forgot password?</a>
+          <a href="#" id="btn-forgot-password" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline;">Forgot PIN?</a>
           <a href="#" id="btn-toggle-auth" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline; margin-top: 10px;">Create an account instead</a>
           ` : `
           <a href="#" id="btn-toggle-auth" style="color: var(--text-muted); font-size: 0.8rem; text-decoration: underline; margin-top: 10px;">Already have one? Sign in</a>
           `}
+        </form>
+      </div>
+    </div>
+  `;
+}
+
+// ── Screen 1b: PIN Creation/Entry ────────────────────────
+
+function renderPin() {
+  return `
+    <div class="onboarding" id="onboarding-screen">
+      <div class="onboarding-content">
+        <div class="onboarding-bolt">🔐</div>
+        <h1 class="onboarding-title">
+          ${isSignInMode ? 'Enter your PIN' : 'Secure your account'}
+        </h1>
+        <p class="onboarding-subtitle">
+          ${isSignInMode ? 'Welcome back.' : 'Create a 4-digit PIN for quick access.'}
+        </p>
+        <form class="onboarding-actions" id="auth-form" style="display: flex; flex-direction: column; gap: 15px;">
+          <label style="font-size: 0.8rem; color: var(--text-muted); text-align: left; margin-bottom: -10px;">${isSignInMode ? 'PIN' : 'Create your PIN (4 digits)'}</label>
+          <input type="password" id="auth-password" placeholder="••••" autocomplete="${isSignInMode ? 'current-password' : 'new-password'}" class="input" style="width: 100%; box-sizing: border-box; text-align: center; font-size: 1.5rem; letter-spacing: 0.5em;" maxlength="4" inputmode="numeric" pattern="[0-9]*" autofocus>
+          
+          ${!isSignInMode ? `
+          <label style="font-size: 0.8rem; color: var(--text-muted); text-align: left; margin-bottom: -10px;">Confirm your PIN</label>
+          <input type="password" id="auth-confirm-password" placeholder="••••" autocomplete="new-password" class="input" style="width: 100%; box-sizing: border-box; text-align: center; font-size: 1.5rem; letter-spacing: 0.5em;" maxlength="4" inputmode="numeric" pattern="[0-9]*">
+          ` : ''}
+
+          <button type="submit" class="btn btn-primary btn-block btn-lg" id="btn-auth-submit">
+            ${isSignInMode ? 'Sign In' : 'Create Account'}
+          </button>
+          
+          <button type="button" class="btn btn-block btn-lg" id="btn-auth-back" style="background: transparent; color: var(--text-muted); box-shadow: none;">
+            Back
+          </button>
         </form>
       </div>
     </div>
@@ -268,6 +390,27 @@ function bindScreenEvents(container) {
       if (!email) return alert('Enter your email first');
       await resetPassword(email);
       alert('Password reset email sent');
+    });
+  }
+
+  const btnLogout = document.getElementById('btn-logout');
+  if (btnLogout) {
+    btnLogout.addEventListener('click', async (e) => {
+      e.preventDefault();
+      await signOutUser();
+      isLocalUnlockMode = false;
+      renderScreen(container);
+    });
+  }
+
+  const btnAuthBack = document.getElementById('btn-auth-back');
+  if (btnAuthBack) {
+    btnAuthBack.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (currentScreen > 0) {
+        currentScreen--;
+        renderScreen(container);
+      }
     });
   }
 
