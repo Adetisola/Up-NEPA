@@ -604,6 +604,11 @@ textarea.input {
   transition: all var(--duration-fast);
 }
 
+.select option {
+  background: var(--bg-card);
+  color: var(--text-primary);
+}
+
 .select:focus {
   outline: none;
   border-color: var(--amber);
@@ -978,11 +983,11 @@ textarea.input {
   align-items: center;
   padding: 0 var(--space-md);
   height: 52px;
-  background: var(--surface);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   font-size: var(--fs-base);
-  color: var(--text-color);
+  color: var(--text-primary);
   cursor: pointer;
   transition: all var(--ease-spring) 0.3s;
 }
@@ -1006,7 +1011,7 @@ textarea.input {
   right: 0;
   max-height: 250px;
   overflow-y: auto;
-  background: var(--surface);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
   z-index: 100;
@@ -1030,12 +1035,12 @@ textarea.input {
 }
 
 .custom-dropdown-item:hover {
-  background: var(--surface-light);
+  background: var(--bg-card-hover);
 }
 
 .custom-dropdown-item.selected {
-  background: var(--primary-alpha);
-  border-left: 3px solid var(--primary);
+  background: var(--amber-glow);
+  border-left: 3px solid var(--amber);
 }
 
 /* ── Bill Helper ───────────────────────────────────── */
@@ -1055,7 +1060,7 @@ textarea.input {
 }
 
 .bill-helper-content {
-  background: var(--surface-light);
+  background: var(--bg-card-hover);
   border-radius: var(--radius-md);
   padding: var(--space-md);
   font-size: 0.8rem;
@@ -1064,7 +1069,7 @@ textarea.input {
 }
 
 .bill-mockup {
-  background: var(--surface);
+  background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
   padding: 10px;

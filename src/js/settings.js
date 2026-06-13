@@ -84,18 +84,18 @@ export function renderSettings(container) {
 
       <!-- Transparency Modal (hidden by default) -->
       <div id="area-change-modal" style="display: none; position: fixed; inset: 0; z-index: 999; background: rgba(0,0,0,0.8); align-items: center; justify-content: center; padding: var(--space-lg);">
-        <div style="background: var(--bg-body); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-lg); width: 100%; max-width: 320px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+        <div style="background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: var(--space-lg); width: 100%; max-width: 320px; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
           <h3 style="font-size: 1.1rem; margin-bottom: 12px; display: flex; align-items: center; gap: 8px;">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="var(--amber)" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
             Change Home Area
           </h3>
           <p style="font-size: 0.9rem; color: var(--text-secondary); margin-bottom: 16px;">Before you continue:</p>
-          <ul style="font-size: 0.9rem; color: var(--text); padding-left: 20px; margin-bottom: 24px; display: flex; flex-direction: column; gap: 12px;">
+          <ul style="font-size: 0.9rem; color: var(--text-primary); padding-left: 20px; margin-bottom: 24px; display: flex; flex-direction: column; gap: 12px;">
             <li>Your streak of <strong>🔥 ${user?.streak || 0} days</strong> will reset to zero.</li>
             <li>You won't be able to change your area again for <strong>${nextTierCooldown} days</strong>.</li>
           </ul>
           <div style="display: flex; gap: 12px;">
-            <button class="btn" id="btn-cancel-area-change" style="flex: 1; background: var(--bg-surface); color: var(--text);">Cancel</button>
+            <button class="btn" id="btn-cancel-area-change" style="flex: 1; background: var(--surface); color: var(--text-primary);">Cancel</button>
             <button class="btn btn-primary" id="btn-confirm-area-change" style="flex: 1;">Yes, Change</button>
           </div>
         </div>
