@@ -22,6 +22,7 @@ import {
   signOut,
   registerPasskey,
   signInWithPasskey,
+  getClient,
 } from './supabase.js';
 import { hashPin } from '../utils/crypto.js';
 
@@ -160,7 +161,17 @@ export async function initStore() {
 
       // Determine if local lock should be active
       if (state.user && localStorage.getItem('upnepa_pin_hash')) {
-        isLocalLockActive = true;
+        const lastActive = localStorage.getItem('upnepa_last_active');
+        const now = Date.now();
+        const GRACE_PERIOD = 24 * 60 * 60 * 1000; // 24 hours
+        
+        if (lastActive && (now - parseInt(lastActive, 10)) < GRACE_PERIOD) {
+          // Still within grace period, keep unlocked and renew timestamp
+          isLocalLockActive = false;
+          localStorage.setItem('upnepa_last_active', now.toString());
+        } else {
+          isLocalLockActive = true;
+        }
       }
 
       // Setup Realtime subscriptions
@@ -218,6 +229,7 @@ export async function signUpUser(email, pin, displayName, areaId) {
     const hashed = await hashPin(pin);
     localStorage.setItem('upnepa_pin_hash', hashed);
     localStorage.setItem('upnepa_saved_email', email);
+    localStorage.setItem('upnepa_last_active', Date.now().toString());
 
     state.user = {
       id: res.data.user.id,
@@ -243,6 +255,7 @@ export async function signInUser(email, pin) {
     const hashed = await hashPin(pin);
     localStorage.setItem('upnepa_pin_hash', hashed);
     localStorage.setItem('upnepa_saved_email', email);
+    localStorage.setItem('upnepa_last_active', Date.now().toString());
 
     const meta = res.data.user.user_metadata || {};
     state.user = {
@@ -275,6 +288,7 @@ export async function signOutUser() {
   isLocalLockActive = false;
   localStorage.removeItem('upnepa_pin_hash');
   localStorage.removeItem('upnepa_saved_email');
+  localStorage.removeItem('upnepa_last_active');
   notify();
 }
 
@@ -286,11 +300,13 @@ export async function unlockLocalSession(pin) {
   const savedHash = localStorage.getItem('upnepa_pin_hash');
   if (!savedHash) {
     isLocalLockActive = false;
+    localStorage.setItem('upnepa_last_active', Date.now().toString());
     return true;
   }
   const inputHash = await hashPin(pin);
   if (inputHash === savedHash) {
     isLocalLockActive = false;
+    localStorage.setItem('upnepa_last_active', Date.now().toString());
     notify();
     return true;
   }

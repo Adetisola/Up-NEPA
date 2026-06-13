@@ -187,7 +187,7 @@ function renderWelcome() {
         </p>
         <form class="onboarding-actions" id="auth-form" style="display: flex; flex-direction: column; gap: 15px;">
           ${!isSignInMode ? `
-          <input type="text" id="auth-name" placeholder="Display name" autocomplete="name" class="input" style="width: 100%; box-sizing: border-box;" value="${tempAuthName}">
+          <input type="text" id="auth-name" placeholder="Your name" autocomplete="name" class="input" style="width: 100%; box-sizing: border-box;" value="${tempAuthName}">
           ` : ''}
           <input type="email" id="auth-email" placeholder="Email" autocomplete="email" class="input" style="width: 100%; box-sizing: border-box;" value="${tempAuthEmail}">
           
